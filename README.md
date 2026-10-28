@@ -31,8 +31,8 @@ Docker 以非 root 使用者執行，僅綁定主機 loopback；健康檢查 `/a
 
 1. 選公開錄製或合成來源，按「開始體驗」，同時播放波形並進行品質檢查與真實推論。
 2. 切換睜眼／閉眼樣本會直接載入並分析；風景視窗的開合由閉眼任務分數控制，不代表放鬆或醫療效果。
-3. 在底部時間軸選片段；拖動時舊結果立即失效，放開後重新分析。主畫面與時間軸均可暫停回放。波形顯示 80 Hz、分析使用原始 160 Hz。
-4. 開啟「試試雜訊攔截」；O1 人工脈衝實際加入分析副本，品質未通過時隱藏分數並停止視覺回應。按「恢復原始訊號」重新分析。
+3. 在底部時間軸選片段；拖動時舊結果立即失效，放開後重新分析。主畫面與時間軸均可暫停回放；這是四秒（或選定長度）片段循環，分數為整段分析結果，不隨每個波峰持續重算。手機操作區可按「查看視覺回應」回到場景。波形顯示 80 Hz、分析使用原始 160 Hz。
+4. 開啟「試試雜訊攔截」；O1 人工脈衝實際加入分析副本，波形標題會註明「分析副本：含人工雜訊」，並說明原始錄製未更動；品質未通過時隱藏分數並停止視覺回應。按「恢復原始訊號」重新分析。
 5. 展開「分析證據與審閱摘要」，查看頻帶、品質、模型基線及 25/60 覆蓋率，並匯出可追溯 JSON。受試者與片段長度在「片段設定」內。
 
 ## 模型與限制
@@ -69,8 +69,8 @@ Demo 原始碼採 MIT，見 LICENSE。公開 EEG 不含於 git，資料遵循 OD
 ```sh
 # 先啟動本機 uvicorn 並下載公開資料
 python tests/record_demo.py
-ffmpeg -i artifacts/recording-v2/og-eeg-full-operation-v2.webm -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/recording-v2/OG_EEG_Demo_Full_Operation_Silent_v2.mp4
-ffprobe -v error -show_streams artifacts/recording-v2/OG_EEG_Demo_Full_Operation_Silent_v2.mp4
+ffmpeg -i artifacts/recording-v3/og-eeg-full-operation-v3.webm -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/recording-v3/OG_EEG_Demo_Full_Operation_Silent_v3.mp4
+ffprobe -v error -show_streams artifacts/recording-v3/OG_EEG_Demo_Full_Operation_Silent_v3.mp4
 ```
 
 錄影腳本實際操作本應用，涵蓋公開／合成來源、播放、片段、分析、品質拒絕與匯出；不是生成動畫。不錄桌面、麥克風或音軌。影片與匯出摘要留在忽略的 artifacts/，不放入程式 repo。公開 EEG 是錄製回放，現場設備未串接。

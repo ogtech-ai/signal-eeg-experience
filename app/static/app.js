@@ -64,6 +64,9 @@ function setPhase(phase) {
 }
 function resetEvidence() {
   state.result = null;
+  $("view-response").hidden = true;
+  $("wave-title").textContent = "錄製訊號";
+  $("copy-note").hidden = true;
   $("download").disabled = true;
   $("probability").innerHTML = "—<small>%</small>";
   $("probability-fill").style.transition = "none";
@@ -108,7 +111,9 @@ function updateSelection() {
   $("start").style.right = "auto";
   $("start").style.width =
     `calc(${((total - duration) / total) * 100}% + 11px)`;
-  $("segment-label").textContent = `選取 ${duration} 秒進行分析`;
+  $("segment-label").textContent = `${duration} 秒片段循環回放`;
+  $("playback-note").textContent =
+    `${duration} 秒片段循環回放；分數為整段分析結果，不隨波峰即時重算。`;
   $("cursor").textContent =
     `${(start + (state.position % duration)).toFixed(1)} 秒`;
   $("restore").hidden = !$("artifact").checked;
@@ -267,6 +272,15 @@ function renderResult(data) {
   $("review-label").textContent =
     `${accepted ? "品質通過" : "品質未通過"} · ${clock(data.request.start)}–${clock(data.request.start + data.request.duration)} · 可匯出`;
   $("download").disabled = false;
+  $("wave-title").textContent = data.artifact_injected
+    ? "分析副本：含人工雜訊"
+    : "錄製訊號";
+  $("copy-note").hidden = !data.artifact_injected;
+  $("jump-summary").textContent = accepted
+    ? `品質通過 · 閉眼任務分數 ${(p * 100).toFixed(1)}%`
+    : "品質未通過 · 分類與回應已暫停";
+  $("view-response").classList.toggle("rejected", !accepted);
+  $("view-response").hidden = false;
   updateSelection();
 }
 function fitCanvas(canvas) {
@@ -576,6 +590,13 @@ $("artifact").onchange = () => {
 $("restore").onclick = () => {
   $("artifact").checked = false;
   $("artifact").onchange();
+};
+$("view-response").onclick = () => {
+  $("scene").scrollIntoView({
+    behavior: reducedMotion.matches ? "auto" : "smooth",
+    block: "start",
+  });
+  $("scene").focus({ preventScroll: true });
 };
 $("scene-play").onclick = () => {
   if (state.record) setPlaying(!state.playing);

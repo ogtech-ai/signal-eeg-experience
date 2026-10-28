@@ -51,7 +51,7 @@
       </div>
       <div class="workbench">
         <section class="experience" aria-label="訊號與視覺回應">
-          <div id="scene" class="scene" data-state="ready">
+          <div id="scene" class="scene" data-state="ready" tabindex="-1">
             <div class="scene-toolbar">
               <span class="scene-label"
                 ><span class="tiny-wave">∿</span> 訊號視窗</span
@@ -91,11 +91,14 @@
               品質未通過 · 視覺回應已暫停
             </div>
           </div>
+          <p id="playback-note" class="playback-note">
+            4 秒片段循環回放；分數為整段分析結果，不隨波峰即時重算。
+          </p>
           <div class="signal-panel">
             <div class="signal-heading">
               <div>
                 <span class="tiny-wave">∿</span>
-                <h2>錄製訊號</h2>
+                <h2 id="wave-title">錄製訊號</h2>
                 <span class="channel-count">3 通道</span>
               </div>
               <span id="provenance">正在載入樣本</span>
@@ -115,6 +118,9 @@
                 ></span
               ><span id="cursor">0.0 秒</span>
             </div>
+            <p id="copy-note" class="copy-note" hidden>
+              這是加入人工脈衝的分析副本；原始錄製未更動。
+            </p>
           </div>
         </section>
         <aside class="inspector" aria-label="樣本選擇與分析狀態">
@@ -195,6 +201,10 @@
               恢復原始訊號 ↗
             </button>
           </section>
+          <button id="view-response" class="view-response" hidden>
+            <span id="jump-summary">分析結果已更新</span
+            ><strong>查看視覺回應 ↑</strong>
+          </button>
           <details class="advanced">
             <summary>片段設定 <span>＋</span></summary>
             <div class="advanced-fields">
@@ -224,7 +234,7 @@
         </button>
         <div class="timeline-title">
           <strong>錄製時間軸</strong
-          ><span id="segment-label">選取 4 秒進行分析</span>
+          ><span id="segment-label">4 秒片段循環回放</span>
         </div>
         <div class="timeline-track">
           <div class="timeline-top">

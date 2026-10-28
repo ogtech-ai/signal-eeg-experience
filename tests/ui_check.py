@@ -14,6 +14,13 @@ with sync_playwright() as p:
     )
     page = context.new_page()
     errors = []
+    analysis_requests = []
+    page.on(
+        "request",
+        lambda request: analysis_requests.append(request.url)
+        if request.url.endswith("/api/analyze")
+        else None,
+    )
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto("http://127.0.0.1:8000")
     page.wait_for_function("!document.querySelector('#analyze').disabled")
@@ -24,6 +31,14 @@ with sync_playwright() as p:
     page.click("#analyze")
     page.wait_for_function("document.querySelector('#status').textContent==='品質通過'")
     page.wait_for_timeout(350)
+    stable_score = page.locator("#probability").inner_text()
+    request_count = len(analysis_requests)
+    page.wait_for_timeout(8500)
+    assert (
+        len(analysis_requests) == request_count
+    ), "Loop playback must not imply continuous inference"
+    assert page.locator("#probability").inner_text() == stable_score
+    assert "分數為整段分析結果" in page.locator("#playback-note").inner_text()
     assert page.locator("#cursor").inner_text() != cursor_before
     page.click("#play")
     page.wait_for_timeout(1200)
@@ -49,6 +64,8 @@ with sync_playwright() as p:
         == 0
     )
     assert page.locator("#prediction").inner_text() == "暫停判讀"
+    assert page.locator("#wave-title").inner_text() == "分析副本：含人工雜訊"
+    assert "原始錄製未更動" in page.locator("#copy-note").inner_text()
     assert page.locator("#restore").is_visible()
     page.screenshot(path=str(OUT / "desktop-rejected.png"), full_page=True)
     page.click("#evidence > summary")
@@ -86,6 +103,13 @@ with sync_playwright() as p:
         page.set_viewport_size({"width": width, "height": height})
         page.wait_for_timeout(300)
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth"), width
+        for selector in ("#sample-caption", "#score", "#playback-note", "footer"):
+            assert (
+                page.locator(selector).evaluate(
+                    "e=>parseFloat(getComputedStyle(e).fontSize)"
+                )
+                >= 13
+            )
         page.locator("h1").click()
         page.screenshot(path=str(OUT / f"viewport-{width}.png"), full_page=True)
     # A real request still controls the responsive UI, not a screenshot or decorative animation.
@@ -139,6 +163,42 @@ with sync_playwright() as p:
     assert fresh.locator("#analyze").is_visible()
     assert fresh.locator("#probability").inner_text().startswith("—")
     fresh.screenshot(path=str(OUT / "mobile-first-use.png"), full_page=True)
+    fresh.click("#analyze")
+    fresh.wait_for_function(
+        "document.querySelector('#status').textContent==='品質通過'"
+    )
+    fresh.click("#scene-play")
+    for sample in ("closed", "open"):
+        fresh.click(f"#{sample}")
+        fresh.wait_for_function(
+            "document.querySelector('#status').textContent==='品質通過'"
+        )
+        assert fresh.locator("#view-response").is_visible()
+        fresh.click("#view-response")
+        fresh.wait_for_function(
+            "document.querySelector('#scene').getBoundingClientRect().top >= 0 && document.querySelector('#scene').getBoundingClientRect().top < 40"
+        )
+    fresh.check("#artifact")
+    fresh.wait_for_function(
+        "document.querySelector('#status').textContent==='品質未通過'"
+    )
+    assert "分類與回應已暫停" in fresh.locator("#jump-summary").inner_text()
+    fresh.click("#view-response")
+    fresh.wait_for_function(
+        "document.querySelector('#scene').getBoundingClientRect().top >= 0 && document.querySelector('#scene').getBoundingClientRect().top < 40"
+    )
+    assert fresh.locator("#prediction").inner_text() == "暫停判讀"
+    fresh.screenshot(path=str(OUT / "mobile-response-rejected.png"), full_page=True)
+    fresh.click("#restore")
+    fresh.wait_for_function(
+        "document.querySelector('#status').textContent==='品質通過'"
+    )
+    assert fresh.locator("#wave-title").inner_text() == "錄製訊號"
+    assert fresh.locator("#copy-note").is_hidden()
+    fresh.click("#view-response")
+    fresh.wait_for_function(
+        "document.querySelector('#scene').getBoundingClientRect().top >= 0 && document.querySelector('#scene').getBoundingClientRect().top < 40"
+    )
     fresh.close()
 
     # Errors clear the prior prediction instead of silently substituting synthetic data.
@@ -158,9 +218,54 @@ with sync_playwright() as p:
     page.unroute("**/api/record?*", unavailable_record)
     page.click("#closed")
     page.wait_for_function("document.querySelector('#status').textContent==='品質通過'")
+    if page.locator('#source option[value="physionet"]').is_enabled():
+        page.select_option("#source", "physionet")
+        page.wait_for_function(
+            "document.querySelector('#status').textContent==='品質通過'"
+        )
+        page.click("#open")
+        page.wait_for_function(
+            "document.querySelector('#status').textContent==='品質通過'"
+        )
+
+        def delivery_state():
+            return {
+                "source": page.locator("#source").input_value(),
+                "subject": page.locator("#subject").input_value(),
+                "start": page.locator("#start").input_value(),
+                "duration": page.locator("#duration").input_value(),
+                "closed": page.locator("#closed").get_attribute("aria-pressed"),
+                "artifact": page.locator("#artifact").is_checked(),
+                "score": page.locator("#probability").inner_text(),
+                "cursor": page.locator("#cursor").inner_text(),
+                "prediction": page.locator("#prediction").inner_text(),
+            }
+
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        page.locator("h1").click()
+        page.wait_for_timeout(1200)
+        desktop_state = delivery_state()
+        page.screenshot(
+            path=str(OUT / "delivery-desktop-physionet.png"), full_page=True
+        )
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.locator("h1").click()
+        page.wait_for_timeout(300)
+        assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
+        assert delivery_state() == desktop_state
+        assert (
+            desktop_state["source"] == "physionet"
+            and desktop_state["start"] == "12"
+            and not desktop_state["artifact"]
+            and desktop_state["closed"] == "false"
+        )
+        page.screenshot(path=str(OUT / "delivery-mobile-physionet.png"), full_page=True)
+        (OUT / "delivery-state.json").write_text(
+            json.dumps(desktop_state, ensure_ascii=False, indent=2)
+        )
     assert not errors, errors
     context.close()
     browser.close()
     print(
-        "UI passed: first use, real/synthetic auto inference, scene response, quality refusal/recovery, JSON provenance, rapid-switch races, timeline, 1280/390/360 layouts, no JS errors"
+        "UI passed: first use, real/synthetic auto inference, scene response, quality refusal/recovery, JSON provenance, rapid-switch races, fixed-score segment looping, complete mobile locate/repeat/reject/recover, matched public delivery states, 1280/390/360 layouts, no JS errors"
     )

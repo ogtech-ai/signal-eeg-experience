@@ -56,3 +56,11 @@ Docker 驗證映像：`og-eeg-demo:local`，ID `sha256:14d0a42c04e5a661790ab2d1e
 - 截圖在 artifacts/ui-redesign/，含 first-use、公開睜／閉眼、拒絕、展開證據與各 viewport，均已目視檢查。完整證據保留 88.9% 僅通過窗的平衡準確率及 25/60 品質覆蓋率。
 - 新版真操作 MP4：artifacts/recording-v2/OG_EEG_Demo_Full_Operation_Silent_v2.mp4，1440×1080、H.264、42.72 秒、2,250,305 bytes、零音軌，完整解碼及擷取畫面檢查通過。只有隔離應用 viewport，沒有桌面、麥克風或配音。
 - 本輪未操作 Docker、遠端服務、GitHub 發布或公開路由。既有 Docker 映像仍是舊 UI；父端若驗收新版，須從新版搬遷 source 包重新建置，不能把舊映像當作已更新。
+
+## 實看 QA 五項回修驗證
+
+維持六項模型／API 測試通過；前端額外檢查四秒片段超過兩輪循環時分析請求數與分數均不變、13px 以上必要說明、人工雜訊副本標題及原始資料告知、手機首次／反覆操作／拒絕／恢復及定位到場景。1440／1280／390／360px 沒有水平溢出，真實延遲回應及錯誤恢復仍通過。
+
+桌機／手機交付圖取自同一個公開 PhysioNet S008 R01、12–16 秒、無雜訊、暫停狀態，數值及控制設定完全相同，記錄在 artifacts/ui-reviewed/delivery-state.json；舊混合來源預覽不是本次交付圖。本次所有新成品只留本機，未重試先前被拒的 Library 上傳。
+
+回修版無聲 MP4：artifacts/recording-v3/OG_EEG_Demo_Full_Operation_Silent_v3.mp4，1440×1080、H.264、46.44 秒、2,687,315 bytes、零音軌；完整解碼無錯誤，錄製無 JavaScript 錯誤。

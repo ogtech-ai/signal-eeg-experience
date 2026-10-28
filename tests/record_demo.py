@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-OUT = Path("artifacts/recording-v2")
+OUT = Path("artifacts/recording-v3")
 OUT.mkdir(parents=True, exist_ok=True)
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -25,7 +25,7 @@ with sync_playwright() as p:
     page.wait_for_timeout(2500)
     page.click("#analyze")
     page.wait_for_function("document.querySelector('#status').textContent==='品質通過'")
-    page.wait_for_timeout(5000)
+    page.wait_for_timeout(8500)
     page.click("#scene-play")
     page.locator("#start").press("Home")
     for _ in range(12):
@@ -85,12 +85,12 @@ with sync_playwright() as p:
     assert not errors, errors
     video = page.video
     context.close()
-    video.save_as(str(OUT / "og-eeg-full-operation-v2.webm"))
+    video.save_as(str(OUT / "og-eeg-full-operation-v3.webm"))
     browser.close()
     print(
         json.dumps(
             {
-                "video": str(OUT / "og-eeg-full-operation-v2.webm"),
+                "video": str(OUT / "og-eeg-full-operation-v3.webm"),
                 "javascript_errors": errors,
                 "audio_capture": False,
             }

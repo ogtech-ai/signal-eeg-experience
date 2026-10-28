@@ -57,3 +57,13 @@
 - 1440×1000、1280×900、390×844、360×800 測試通過；無水平溢出。公開／合成自動推論、場景幾何變化、雜訊拒絕與恢復、JSON 真實來源、時間軸、競態、reduced-motion 均通過。模型／API 六項測試維持通過。
 - 截圖：artifacts/ui-redesign/desktop-first-use.png、desktop-public-open.png、desktop-public-closed.png、desktop-rejected.png、desktop-evidence.png、viewport-1280.png、viewport-390.png、viewport-360.png、mobile-rejected.png。以上已目視檢查；生圖參考留在同目錄的 reference/，不進 git。
 - 新版錄影流程在 tests/record_demo.py，輸出 artifacts/recording-v2/。舊錄影及截圖保留為舊 UI 證據，不能冒充新版。
+
+## 獨立實看 QA 的五項修正
+
+1. 手機操作區新增精簡品質／任務分數摘要與「查看視覺回應」按鈕。定位會回到場景並移動可存取焦點，尊重 reduced-motion；不強制每次切換自動跳頁。
+2. 場景下方與時間軸明示選定片段循環回放。分數為整段分析結果，不是每一個波峰即時重算。測試讓四秒片段播放超過兩輪，確認分數不變且沒有新增分析請求。
+3. 非目前使用者腦波、非放鬆程度、設備未串接等必要說明提高至至少 13px 與深色文字；桌機／手機 QA 檢查字級並目視驗證。
+4. 後端實際回傳人工雜訊副本時，波形標題改為「分析副本：含人工雜訊」，並清楚註明原始錄製未更動；恢復後標題與說明一併還原。
+5. 交付圖統一使用同一份 PhysioNet S008 R01、12–16 秒、四秒長度、無人工雜訊、暫停在 12.0 秒。桌機及手機用同一份已完成結果切換 viewport 截圖，DOM 狀態相等測試通過；不是一張公開、一張合成。
+
+手機完整首次開始、兩次樣本切換、定位場景、拒絕、恢復再定位均已真實操作。交付圖在 artifacts/ui-reviewed/，同態證據為 delivery-state.json；新版無聲錄影輸出 artifacts/recording-v3/。本次沒有重試 Library，也沒有上傳到其他目的地或改動部署。
