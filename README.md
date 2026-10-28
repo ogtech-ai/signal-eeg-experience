@@ -1,76 +1,74 @@
-# OG EEG 訊號互動 Demo
+# OG EEG 檢測報告工作台
 
-建議 repository：`ogtech-ai/signal-eeg-experience`；topics：`signal`、`eeg`、`demo`、`cpu`、`fastapi`。適用於公開 EEG 教學、訊號品質展示與輕量模型技術評估；未宣稱與任何客戶合作。
+可重用的 CPU 訊號審閱專案：匿名個案／作息 → 公開或合成示範、CSV 上傳 → 品質遮罩與頻譜 → 可定位片段 → 可列印 PDF、JSON 與原始資料。繁體中文單頁介面，無付費 API、無 GPU。適用於 EEG 技術教學與非臨床訊號審閱；未宣稱任何客戶合作或設備串接。
 
-CPU 可運行的獨立研究展示：錄製樣本 → 波形回放 → 選取 4–8 秒 → 品質檢查 → 頻譜特徵／輕量 ML → 場景開合 → JSON 專家摘要。繁體中文、暖白與 teal 的單頁產品介面，不依賴付費 API。
-
-**尚未串接幸福腦設備。不是即時使用者腦波、醫療器材或療效展示。** 場景只映射睜眼／閉眼模型分數，沒有光刺激或音訊控制。人工雜訊在介面及摘要明示。
+**技術觀察，待專業確認。** 不偵測疾病，不推論焦慮／壓力／放鬆或療效。示範個案完全虛構，示範 EEG 不對應填寫個案。睜閉眼只標示錄製條件，不當成雜訊。
 
 ## 啟動
 
-Python 3.12，CPU；建議 2 vCPU、2 GB RAM、1 GB 可用磁碟（含套件；瀏覽器測試另需空間）。首次訓練在第一次分析時執行，後續快取於記憶體。單程序即可。
+Python 3.12，建議 2 vCPU、2 GB RAM、1 GB 磁碟（瀏覽器測試另需空間）。
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
-python -m scripts.prepare_data   # 可選：16 個公開基線 EDF，約 20 MB，S001–S008 R01/R02
+python -m scripts.prepare_data  # 可選：合法公開 EEG，S001–S008 R01/R02，原始 EDF 約20MB
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-開啟 http://127.0.0.1:8000 。這是本機網址，尚無公開客戶網址。未下載完整公開資料時，預設僅提供清楚標示的合成訊號。下載完成後重新啟動程序，介面自動啟用公開錄製。資料不會上傳。
+開啟 http://127.0.0.1:8000 。這是本機網址。沒有公開樣本時仍有明示的合成來源。公開預設 S008 R01（睜眼），可切 R02（閉眼）。公開錄製不是即時使用者腦波；設備尚未串接。
 
 ```sh
 docker compose up --build
-# 公開資料先由主機 prepare_data 下載；compose 唯讀掛載 ./data
 ```
 
-Docker 以非 root 使用者執行，僅綁定主機 loopback；健康檢查 `/api/health`。單獨 `docker run --rm -p 127.0.0.1:8000:8000 eeg-demo` 可跑合成模式。正式開放網路前須由 VM 管理者設定經授權的 HTTPS reverse proxy 和存取政策。
+Docker 非 root，預設只綁 loopback，資料唯讀掛載。健康檢查 `/api/health`。遠端部署由管理者核准目標、HTTPS 與存取政策後執行；不會自動購買資源、改 IAM 或防火牆。
 
-## 示範流程
+## 操作與資料保護
 
-1. 選公開錄製或合成來源，按「開始體驗」，同時播放波形並進行品質檢查與真實推論。
-2. 切換睜眼／閉眼樣本會直接載入並分析；風景視窗的開合由閉眼任務分數控制，不代表放鬆或醫療效果。
-3. 在底部時間軸選片段；拖動時舊結果立即失效，放開後重新分析。主畫面與時間軸均可暫停回放；這是四秒（或選定長度）片段循環，分數為整段分析結果，不隨每個波峰持續重算。手機操作區可按「查看視覺回應」回到場景。波形顯示 80 Hz、分析使用原始 160 Hz。
-4. 開啟「試試雜訊攔截」；O1 人工脈衝實際加入分析副本，波形標題會註明「分析副本：含人工雜訊」，並說明原始錄製未更動；品質未通過時隱藏分數並停止視覺回應。按「恢復原始訊號」重新分析。
-5. 展開「分析證據與審閱摘要」，查看頻帶、品質、模型基線及 25/60 覆蓋率，並匯出可追溯 JSON。受試者與片段長度在「片段設定」內。
+1. 保留完全虛構個案或選匿名自填。年齡、作息、舒適偏好只在瀏覽器組合，**不送分析 API**。舒適選項不輸出聲光。
+2. 選公開／合成來源，或選自己的 CSV。按「產生檢測報告」。修改輸入後舊報告失效，需重新產生才能匯出。
+3. 查看四頻帶、原始時序、PSD、每四秒時間—頻率。點遮罩表或證據連結定位原始片段；定位不會重算或修改平均頻譜。
+4. 列印／另存 PDF 使用瀏覽器列印視窗。JSON 保留數值、遮罩、規則、來源雜湊與個案背景；原始 CSV 可另下載核對。PDF／JSON 含自填資料，請自行保管。
+5. 「清空」釋放目前介面持有的資料。沒有 localStorage、資料庫、共享個案或報告 URL；這不是作業系統等級安全抹除承諾。
 
-## 模型與限制
+上傳只在伺服器記憶體處理，不寫檔、不記錄內容、不傳第三方。分析結果回到本次請求，不提供持久取回。API 回應 `Cache-Control: no-store`。正式公開前仍應由部署者設定 HTTPS、請求速率／並行限制與存取政策，避免上傳不必要個資。
 
-PhysioNet EEGMMIDB 1.0.0，R01 睜眼、R02 閉眼；O1/Oz/O2 三個枕葉通道。MNE 讀 EDF 並轉為 µV。非重疊 4 秒片段，Welch PSD（2 秒 Hann），4–8 / 8–13 / 13–30 Hz 相對頻帶功率，取 log，StandardScaler + LogisticRegression。沒有重型神經網路、GPU 或外部權重。
+## CSV 契約與數學方法
 
-訓練 S001–S006；獨立測試 S007–S008，依受試者分割，縮放只 fit 訓練集。每類各一段原始錄製；視窗雖不重疊，仍非獨立受試者。小樣本僅為技術基線，無外部驗證、無信賴區間、機率未校準。展示已接觸測試受試者；後續調參須另保留新測試集。4 秒模型用於 8 秒片段屬展示延伸，未單獨驗證。品質門檻為啟發式：任一通道峰對峰 >200 µV 或標準差 <0.5 µV 即拒絕，並非 autoreject 或臨床品質認證。不映射成壓力、腦損傷或療效。
+第一版上傳僅支援 UTF-8 CSV，**不支援 EDF 上傳**。EDF 僅用 MNE 讀取已知公開資料，不自寫 EDF parser。
 
-合成資料依 deterministic seed 產生不同 alpha 振幅，只驗證功能與管線；其準確率不代表真實 EEG 效果。已驗證公開 EEG：品質通過 25/60 測試窗的平衡準確率 88.89%；35 窗被拒絕，且訓練只有 4 位受試者留有可用窗口。詳見驗證紀錄，不能外推成產品成效。公開模式預設 S008 的 12–16 秒品質通過片段，其他位置仍可自由選取。公開資料的實際測試結果由 `prepare_data` 產生於 `data/evaluation.json`，manifest 記錄每份下載 URL 與 SHA-256。請參考 [驗證紀錄](docs/VALIDATION.md)。
+```csv
+time_s,O1_uV,O2_uV
+0,10,12
+0.00625,11,13
+```
 
-## 測試
+上例僅展示欄位，完整檔須 8–120 秒；1–8 EEG 通道、128–512 Hz、時間從零開始且等距（1%容差）、最多8MiB／61440列。通道名為英文字母開頭 `_uV` 結尾，不接受 EOG/ECG/EMG 混入 EEG 平均；單位必須微伏。拒絕 NaN/Inf、重複欄、錯列、非遞增時間與不合理振幅。可先下載示範原始 CSV 作格式參考。
+
+非重疊4秒品質窗，兩秒 Hann／50% overlap Welch PSD，僅去常數均值，無濾波、插值、重參考、ICA 或自動修補。未滿四秒尾段保留原值但不納入統計。平均通過窗 PSD，再平均 EEG 通道。Delta 0.5–4、Theta 4–8、Alpha 8–13、Beta 13–30 Hz；界線採插值積分，相鄰頻帶不重複計功率，分母為0.5–30Hz總功率。不是年齡常模比較。
+
+- Q1：任一通道峰對峰 >200µV，排除整窗平均。
+- Q2：任一通道標準差 <0.5µV，排除整窗平均。
+- A1：0.5–4 /0.5–45Hz >65% 且峰對峰 >120µV，疑似眼動／慢漂移，僅標記。
+- A2：20–45 /0.5–45Hz >50% 且去均值 RMS >10µV，疑似肌電／高頻干擾，僅標記。
+
+A1/A2 是未經臨床驗證的啟發式，沒有 EOG/EMG 不能確認來源。A2 不是 MNE 110–140Hz 肌電算法。所有窗拒絕時不輸出假正常的頻帶值。時間—頻率圖包含全部窗，排除窗加斜線。觀察模板保留規則及片段證據；作息提示只取自自填，不由 EEG 推測。
+
+## 驗證與移交
 
 ```sh
 python -m pytest -q
 python -m playwright install chromium
-# 另一終端先啟動 uvicorn
+# 另啟動 uvicorn 後
 python tests/ui_check.py
+python scripts/verify_deployment.py --base-url http://127.0.0.1:8000
+python tests/record_demo.py   # 真實瀏覽器操作無聲 WebM；不錄桌面
+python scripts/package_migration.py # 僅已提交來源與明確白名單公開樣本
 ```
 
-API 測試涵蓋頻譜、受試者隔離、訊號變化、品質拒絕、人工雜訊與輸入界限。瀏覽器測試涵蓋首次使用、公開／合成樣本自動推論、播放、拒絕／恢復、JSON 來源、真正延後舊回應的競態測試、1280／390／360px 版面與 JS 錯誤。截圖只留本機 `artifacts/`。CI 用標準 GitHub-hosted `ubuntu-latest`，10 分鐘上限，不下載 EEG、不保留 Actions artifact；請依組織當前計費與使用量政策確認額度。
+測試涵蓋已知正弦頻帶、功率積分、原值不變、遮罩、條件獨立、全拒絕、輸入邊界、無檔案持久化、個案不傳送、下載與錯誤恢復、360/390/1280/1440px、PDF 列印及無 JS 錯誤。CI 使用標準 GitHub-hosted runner，不保留 artifact、不下載 EEG；部署 workflow 為手動 preflight 範本，未啟用遠端部署。
 
-## 部署與後續串接
+[來源與授權](docs/SOURCES.md)、[搬遷流程](docs/MIGRATION.md)、[部署說明](docs/DEPLOYMENT.md)。程式 MIT；PhysioNet EEGMMIDB 1.0.0 為 ODC Attribution 1.0，下載腳本及 manifest 保留來源與雜湊。未將原始資料、報告、權重或秘密放入 git。
 
-[常駐主機搬遷清單](docs/MIGRATION.md) 與 [VM 部署範本](docs/DEPLOYMENT.md)；目前準備移交至指定的常駐 Linux CPU 主機；本工作區不執行遠端部署。GitHub Actions `deploy-vm.yml` 僅手動 preflight，缺設定立即失敗，即使填齊仍不執行遠端操作。沒有持久憑證、IAM、防火牆或雲資源變更。
-
-設備介面未提供：未來 adapter 至少需 sample rate、通道名稱、單位、時間戳與資料權限。API 提供未來介接邊界，但本次未承諾設備相容。公開展示不提供任意資料上傳，也不收集個資。
-
-## 授權
-
-Demo 原始碼採 MIT，見 LICENSE。公開 EEG 不含於 git，資料遵循 ODC Attribution 1.0；引用、套件選擇與授權見 [SOURCES.md](docs/SOURCES.md)。未包含客戶提案、私有資料、秘密或外部模型權重。
-
-## 無聲操作錄影
-
-```sh
-# 先啟動本機 uvicorn 並下載公開資料
-python tests/record_demo.py
-ffmpeg -i artifacts/recording-v3/og-eeg-full-operation-v3.webm -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/recording-v3/OG_EEG_Demo_Full_Operation_Silent_v3.mp4
-ffprobe -v error -show_streams artifacts/recording-v3/OG_EEG_Demo_Full_Operation_Silent_v3.mp4
-```
-
-錄影腳本實際操作本應用，涵蓋公開／合成來源、播放、片段、分析、品質拒絕與匯出；不是生成動畫。不錄桌面、麥克風或音軌。影片與匯出摘要留在忽略的 artifacts/，不放入程式 repo。公開 EEG 是錄製回放，現場設備未串接。
+舊錄製回放／睜閉眼 ML 基線 API 保留相容，**不是目前報告模型**；其小樣本驗證見 [歷史基線紀錄](docs/VALIDATION.md)，不可把舊88.89%當報告或產品準確率。舊 UI 回退標籤 `experience-ui-reviewed-9c8f6cb`。建議公司 repo `ogtech-ai/signal-eeg-experience`，topics `signal,eeg,cpu,demo`。

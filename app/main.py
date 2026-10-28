@@ -1,3 +1,8 @@
+from typing import Literal
+from fastapi import Request
+from fastapi.responses import Response
+from .reporting import MAX_BYTES, analyze_report, csv_bytes, demo_record, parse_csv
+import hashlib
 from functools import lru_cache
 import time
 from fastapi import FastAPI, HTTPException
@@ -6,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from .core import ROOT, FS, CHANNELS, load_record, train, features, quality
 
-app = FastAPI(title="OG 幸福腦技術體驗", version="0.1.0")
+app = FastAPI(title="OG EEG 檢測報告工作台", version="0.2.0")
 app.mount("/static", StaticFiles(directory=ROOT / "app/static"), name="static")
 
 
@@ -125,3 +130,116 @@ def model(source: str = "synthetic"):
         return baseline(source)[1]
     except FileNotFoundError as e:
         raise HTTPException(409, str(e))
+
+
+# New report workflow: no patient fields or uploaded files are persisted.
+
+
+@app.middleware("http")
+async def report_privacy_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/report/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.get("/api/report/catalog")
+def report_catalog():
+    public = all((ROOT / "data" / f"S008R{r:02d}.npz").exists() for r in (1, 2))
+    return {
+        "public_available": public,
+        "sources": [
+            {"id": "public-open", "label": "公開 EEG · S008 睜眼", "available": public},
+            {
+                "id": "public-closed",
+                "label": "公開 EEG · S008 閉眼",
+                "available": public,
+            },
+            {
+                "id": "synthetic-artifacts",
+                "label": "合成示範 · 含人工偽跡",
+                "available": True,
+            },
+            {
+                "id": "synthetic-clean",
+                "label": "合成示範 · 乾淨訊號",
+                "available": True,
+            },
+        ],
+        "upload": {
+            "format": "UTF-8 CSV",
+            "max_bytes": MAX_BYTES,
+            "max_channels": 8,
+            "sample_rate_hz": [128, 512],
+            "duration_seconds": [8, 120],
+        },
+    }
+
+
+@app.get("/api/report/demo")
+def report_demo(source: str = "synthetic-artifacts"):
+    try:
+        x, fs, channels, meta = demo_record(source)
+        digest = hashlib.sha256(x.astype("<f8").tobytes()).hexdigest()
+        return analyze_report(x, fs, channels, meta, digest)
+    except FileNotFoundError as error:
+        raise HTTPException(
+            409, "公開樣本尚未下載；仍可選擇明確標示的合成示範。"
+        ) from error
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
+
+
+@app.get("/api/report/demo.csv")
+def report_demo_csv(source: str = "synthetic-artifacts"):
+    try:
+        x, fs, channels, _ = demo_record(source)
+        return Response(
+            csv_bytes(x, fs, channels),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="eeg-demo.csv"'},
+        )
+    except (FileNotFoundError, ValueError) as error:
+        raise HTTPException(422, "此示範來源不可用。") from error
+
+
+@app.post("/api/report/upload")
+async def report_upload(
+    request: Request,
+    condition: Literal["eyes_open", "eyes_closed", "unspecified"] = "unspecified",
+):
+    if request.headers.get("content-type", "").split(";")[0] not in (
+        "text/csv",
+        "application/octet-stream",
+    ):
+        raise HTTPException(
+            415, "此版只接受原始 UTF-8 CSV，不接受 EDF、multipart 或壓縮檔。"
+        )
+    length = request.headers.get("content-length")
+    if length and (not length.isdigit() or int(length) > MAX_BYTES):
+        raise HTTPException(413, "上傳大小上限為 8 MiB。")
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_BYTES:
+            raise HTTPException(413, "上傳大小上限為 8 MiB。")
+        body.extend(chunk)
+    try:
+        x, fs, channels = parse_csv(body)
+        digest = hashlib.sha256(body).hexdigest()
+        return analyze_report(
+            x,
+            fs,
+            channels,
+            {
+                "kind": "upload",
+                "label": "使用者上傳 CSV",
+                "condition": condition,
+                "reference": "本次工作階段；SHA-256 見報告",
+                "notice": "使用者提供的數值，未獨立驗證其來源。沒有儲存檔案、個案資料或共享 session。",
+            },
+            digest,
+        )
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error

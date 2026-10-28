@@ -23,7 +23,7 @@ python3 scripts/verify_deployment.py --base-url http://127.0.0.1:8000
 ```
 
 4. 驗證 container 為 non-root、CPU 2／RAM 2 GiB 上限、data 掛載唯讀、health 為 healthy。預設只綁 loopback，不是公開網址。
-5. 瀏覽器驗收公開／合成模式、回放、12–16 秒樣本、人工雜訊拒絕、25/60 品質覆蓋率、摘要下載。88.89% 只代表品質通過測試窗，不代表全部訊號或產品準確率。幸福腦現場設備尚未串接。
+5. 瀏覽器驗收新版檢測報告：虛構個案、公開 S008 R01、13/15通過窗、四頻帶、原始片段定位、CSV錯誤恢復、PDF列印與JSON匯出。個案欄位不送分析API，CSV僅記憶體分析，不掛載上傳持久目錄。設備尚未串接。舊分類準確率不適用報告工作流。
 6. 父端確認遠端驗收成功與持久化位置後，才另行授權 Mac 本案具名 container/image 清理。禁止全域 docker prune；保留原始碼及交付影片。任何新安裝、權限提示或存取拒絕先回報。
 
 回復：在既定部署目錄切回先前已驗證 source commit/image，再 up；不得停止或覆寫其他專案容器。GitHub/GCP 工作流仍是未啟用的 preflight，不會因搬遷自動部署。

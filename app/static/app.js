@@ -1,654 +1,808 @@
 const $ = (id) => document.getElementById(id);
 const state = {
-  closed: false,
-  record: null,
-  result: null,
-  started: false,
-  playing: false,
-  position: 0,
+  analysis: null,
+  profile: null,
+  source: null,
+  file: null,
+  selected: 0,
+  channel: 0,
   generation: 0,
-  phase: "loading",
-  lastFrame: 0,
-  raf: 0,
-  timer: 0,
+  busy: false,
+  dirty: false,
+  controller: null,
 };
-const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-const phaseNames = {
-  loading: "正在載入",
-  ready: "等待分析",
-  analyzing: "分析中…",
-  accepted: "品質通過",
-  rejected: "品質未通過",
-  stale: "片段已變更",
-  error: "分析失敗",
+const labels = {
+  eyes_open: "睜眼",
+  eyes_closed: "閉眼",
+  unspecified: "未註明",
 };
-const clock = (seconds) =>
-  `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-async function api(url, options) {
-  const response = await fetch(url, options);
-  const data = await response.json();
+const ruleLabels = {
+  Q1: "振幅超門檻",
+  Q2: "平坦訊號",
+  A1: "疑似眼動／慢漂移",
+  A2: "疑似肌電／高頻干擾",
+};
+const bandLabels = {
+  delta: "Delta",
+  theta: "Theta",
+  alpha: "Alpha",
+  beta: "Beta",
+};
+const esc = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+const fmt = (n) => Number(n).toFixed(1);
+const mobile = matchMedia("(max-width:800px)");
+const reduced = matchMedia("(prefers-reduced-motion:reduce)");
+function setPhase(text) {
+  $("phase").textContent = text;
+}
+function updateActions() {
+  const ready = !!state.analysis && !state.dirty && !state.busy;
+  for (const id of ["print-report", "export-json", "download-raw"])
+    $(id).disabled = !ready;
+  $("generate").disabled =
+    state.busy || ($("source").value === "upload" && !state.file);
+  $("generate").innerHTML = state.busy
+    ? "正在計算頻譜與遮罩…"
+    : `產生檢測報告 <span>↗</span>`;
+  document.body.classList.toggle("busy", state.busy);
+}
+function markDirty() {
+  state.generation++;
+  state.controller?.abort();
+  state.busy = false;
+  state.dirty = !!state.analysis;
+  $("draft-notice").hidden = !state.dirty;
+  $("report").classList.toggle("stale", state.dirty);
+  setPhase("待產生");
+  $("error").textContent = "";
+  updateActions();
+}
+function applyCase() {
+  const fictional = $("case-preset").value === "fictional";
+  const values = fictional
+    ? {
+        "case-code": "DEMO-001",
+        age: "32",
+        sleep: "5.5",
+        caffeine: "2",
+        "profile-note": "完全虛構的流程示範，不對應任何真人。",
+      }
+    : { "case-code": "", age: "", sleep: "", caffeine: "", "profile-note": "" };
+  for (const [id, value] of Object.entries(values)) {
+    $(id).value = value;
+    $(id).readOnly = fictional;
+  }
+  $("shift").checked = false;
+  $("shift").disabled = fictional;
+  $("case-code").required = !fictional;
+  $("profile-editor").open = !fictional;
+  $("case-preview").textContent = fictional
+    ? "DEMO-001 · 32 歲 · 完全虛構"
+    : "使用匿名代號；不填真姓名";
+  markDirty();
+}
+function profile() {
+  for (const id of ["case-code", "age", "sleep", "caffeine"])
+    if (!$(id).reportValidity())
+      throw Error("請確認個案欄位的數值與匿名代號。");
+  const numeric = (id) => ($(id).value === "" ? null : Number($(id).value));
+  return {
+    kind: $("case-preset").value,
+    code: $("case-code").value.trim() || "未提供",
+    age: numeric("age"),
+    sleep_hours: numeric("sleep"),
+    caffeine_servings: numeric("caffeine"),
+    irregular_schedule: $("shift").checked,
+    note: $("profile-note").value.trim(),
+    comfort: $("comfort").value,
+  };
+}
+async function responseData(response) {
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw Error("分析服務回應不完整，請稍後再試。");
+  }
   if (!response.ok)
     throw Error(
       typeof data.detail === "string"
         ? data.detail
-        : "無法完成分析，請重新選擇片段。",
+        : "輸入驗證失敗，請檢查格式與實驗條件。",
     );
   return data;
 }
-function setPhase(phase) {
-  state.phase = phase;
-  $("scene").dataset.state = phase;
-  $("status").textContent = phaseNames[phase];
-  $("analyze").disabled =
-    !state.record || phase === "loading" || phase === "analyzing";
-  $("play").disabled = !state.record || phase === "loading";
-  $("scene-play").disabled = !state.record || phase === "loading";
-  $("start").disabled = !state.record || phase === "loading";
-  $("scene-mode").textContent =
-    phase === "accepted"
-      ? "模型結果已連動"
-      : phase === "rejected"
-        ? "已停止判讀"
-        : phase === "analyzing"
-          ? "品質檢查 → 模型推論"
-          : phase === "stale"
-            ? "等待重新分析"
-            : "錄製樣本 · 非即時量測";
-  $("analyze-label").textContent = !state.started
-    ? "開始體驗"
-    : phase === "analyzing"
-      ? "分析中…"
-      : phase === "stale"
-        ? "分析新片段"
-        : "重新分析";
-}
-function resetEvidence() {
-  state.result = null;
-  $("view-response").hidden = true;
-  $("wave-title").textContent = "錄製訊號";
-  $("copy-note").hidden = true;
-  $("download").disabled = true;
-  $("probability").innerHTML = "—<small>%</small>";
-  $("probability-fill").style.transition = "none";
-  $("probability-fill").style.width = "0%";
-  document.querySelector(".probability-track").classList.add("inactive");
-  $("display-range").textContent = "顯示範圍 ±100 µV";
-  $("probability-pin").style.opacity = 0;
-  $("quality-indicator").className = "quality-indicator";
-  $("quality-count").textContent = "— / 3";
-  $("quality").textContent = "分析後確認三通道訊號品質。";
-  $("channel-quality").innerHTML = ["O1", "Oz", "O2"]
-    .map((c) => `<span>${c} <i>—</i></span>`)
-    .join("");
-  $("score").textContent = "分類任務分數，並非情緒或健康指標。";
-  $("latency").textContent = "CPU 推論";
-  $("baseline-accuracy").textContent = "—";
-  $("baseline-coverage").textContent = "—";
-  $("bands").innerHTML = "<p>分析後顯示 4–30 Hz 頻帶功率比例。</p>";
-  $("metrics").textContent = "小樣本研究基線，不代表設備或整體產品成效。";
-  $("summary").textContent = "目前選取的片段尚未分析。";
-  $("review-label").textContent = "目前片段尚未分析";
-  $("scene-paused").hidden = true;
-  $("scene-intro").hidden = state.started;
-  $("prediction").textContent = state.started ? "等待重新分析" : "準備就緒";
-  $("response-note").textContent = "視窗開合將由閉眼任務分數控制";
-  $("scene").style.setProperty("--opening", "43%");
-}
-function invalidate() {
-  state.generation++;
-  clearTimeout(state.timer);
-  resetEvidence();
-  setPhase(state.record ? "stale" : "loading");
-}
-function updateSelection() {
-  const start = Number($("start").value),
-    duration = Number($("duration").value),
-    total = state.record?.duration || 60;
-  $("time").textContent = `${clock(start)} — ${clock(start + duration)}`;
-  $("total-time").textContent = clock(total);
-  $("end-time").textContent = clock(total);
-  $("start").style.left = "-5.5px";
-  $("start").style.right = "auto";
-  $("start").style.width =
-    `calc(${((total - duration) / total) * 100}% + 11px)`;
-  $("segment-label").textContent = `${duration} 秒片段循環回放`;
-  $("playback-note").textContent =
-    `${duration} 秒片段循環回放；分數為整段分析結果，不隨波峰即時重算。`;
-  $("cursor").textContent =
-    `${(start + (state.position % duration)).toFixed(1)} 秒`;
-  $("restore").hidden = !$("artifact").checked;
-}
-async function load() {
-  setPlaying(false);
-  state.record = null;
-  state.position = 0;
-  invalidate();
-  const id = state.generation;
-  $("error").textContent = "";
-  $("provenance").textContent = "正在載入樣本…";
+async function generate({ automatic = false } = {}) {
+  let background;
   try {
-    const record = await api(
-      `/api/record?source=${$("source").value}&subject=${$("subject").value}&closed=${state.closed}`,
-    );
-    if (id !== state.generation) return;
-    state.record = record;
-    $("start").max = Math.floor(record.duration - Number($("duration").value));
-    $("start").value =
-      record.source === "physionet" && record.subject === 8 ? 12 : 0;
-    $("provenance").textContent =
-      `${record.source === "synthetic" ? "合成訊號 · 非真人腦波" : "PhysioNet 公開 EEG 回放"} / ${record.label} / S00${record.subject}`;
-    $("open").querySelector("span").textContent =
-      record.source === "physionet" ? "R01 · 睜眼基線" : "合成 · 睜眼模式";
-    $("closed").querySelector("span").textContent =
-      record.source === "physionet" ? "R02 · 閉眼基線" : "合成 · 閉眼模式";
-    $("sample-caption").textContent =
-      record.source === "synthetic"
-        ? "程式產生的功能測試訊號，並非真人腦波。"
-        : "公開受試者的錄製，並非目前使用者的腦波。";
-    document.querySelector(".replay-label").innerHTML =
-      `<span class="tiny-wave">∿</span> ${record.source === "synthetic" ? "合成訊號模式" : "公開錄製回放"}`;
-    updateSelection();
-    setPhase("ready");
-    drawAll();
-    if (state.started) await analyze();
+    background = profile();
   } catch (error) {
-    if (id !== state.generation) return;
-    state.record = null;
-    setPhase("error");
-    $("scene-intro").hidden = true;
-    $("prediction").textContent = "樣本暫時不可用";
-    $("response-note").textContent = "請重新選擇樣本或稍後再試";
     $("error").textContent = error.message;
-    drawAll();
+    return;
   }
-}
-async function analyze({ play = false } = {}) {
-  if (!state.record) return;
-  clearTimeout(state.timer);
-  state.started = true;
-  $("first-use").classList.add("started");
-  $("first-use").querySelector(".guide-title").textContent = "接著試試";
+  const source = $("source").value;
+  if (source === "upload" && !state.file) {
+    $("error").textContent = "請選擇一個符合規格的 CSV，或切回示範資料。";
+    return;
+  }
   const id = ++state.generation;
-  resetEvidence();
-  setPhase("analyzing");
+  state.controller?.abort();
+  state.controller = new AbortController();
+  state.busy = true;
   $("error").textContent = "";
-  $("scene-intro").hidden = true;
-  $("prediction").textContent = "正在讀取訊號";
-  $("response-note").textContent = "先確認品質，再計算模型結果";
-  if (play) setPlaying(true);
-  const request = {
-    source: $("source").value,
-    subject: Number($("subject").value),
-    closed: state.closed,
-    start: Number($("start").value),
-    duration: Number($("duration").value),
-    artifact: $("artifact").checked,
-  };
+  setPhase("分析中");
+  updateActions();
+  if (!state.analysis) {
+    $("loading").hidden = false;
+    $("loading").querySelector("strong").textContent = "正在建立檢測報告";
+  }
   try {
-    const data = await api("/api/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-    });
+    const options = { signal: state.controller.signal, cache: "no-store" };
+    let response;
+    if (source === "upload") {
+      response = await fetch(
+        `/api/report/upload?condition=${$("condition").value}`,
+        {
+          ...options,
+          method: "POST",
+          headers: { "Content-Type": "text/csv" },
+          body: state.file,
+        },
+      );
+    } else {
+      response = await fetch(
+        `/api/report/demo?source=${encodeURIComponent(source)}`,
+        options,
+      );
+    }
+    const data = await responseData(response);
     if (id !== state.generation) return;
-    state.result = data;
-    renderResult(data);
-    drawAll();
+    state.analysis = data;
+    state.profile = background;
+    state.source = source;
+    state.selected = data.windows.findIndex(
+      (w) => !w.included || w.review_rules.length,
+    );
+    if (state.selected < 0) state.selected = 0;
+    state.channel = 0;
+    state.dirty = false;
+    $("draft-notice").hidden = true;
+    $("report").classList.remove("stale");
+    $("report").hidden = false;
+    $("loading").hidden = true;
+    render();
+    setPhase("報告已產生");
+    if (mobile.matches) {
+      $("workflow-details").open = false;
+      if (!automatic)
+        document
+          .querySelector(".report-column")
+          .scrollIntoView({
+            behavior: reduced.matches ? "auto" : "smooth",
+            block: "start",
+          });
+    }
   } catch (error) {
-    if (id !== state.generation) return;
-    setPlaying(false);
-    setPhase("error");
-    $("prediction").textContent = "暫時無法分析";
-    $("response-note").textContent = "請重新選取片段或切換樣本";
+    if (id !== state.generation || error.name === "AbortError") return;
     $("error").textContent = error.message;
+    setPhase("請檢查輸入");
+    if (!state.analysis) {
+      $("loading").querySelector("strong").textContent = "尚未產生報告";
+      $("loading").querySelector("p").textContent =
+        "請修正輸入，示範資料始終可以重新選擇。";
+    }
+  } finally {
+    if (id === state.generation) {
+      state.busy = false;
+      updateActions();
+    }
   }
 }
-function renderResult(data) {
-  const accepted = data.quality.accepted,
-    p = data.closed_probability;
-  setPhase(accepted ? "accepted" : "rejected");
-  if (!accepted) setPlaying(false);
-  $("prediction").textContent = accepted
-    ? p >= 0.5
-      ? "視野收合"
-      : "視野展開"
-    : "暫停判讀";
-  $("response-note").textContent = accepted
-    ? `模型偏向${data.prediction} · 視窗開合依任務分數映射`
-    : "原始資料未改變，僅停止這次的分類";
-  $("scene-paused").hidden = accepted;
-  $("scene").style.setProperty(
-    "--opening",
-    accepted ? `${46 - 35 * p}%` : "19%",
-  );
-  $("quality-indicator").className =
-    `quality-indicator ${accepted ? "accepted" : "rejected"}`;
-  $("quality-count").textContent =
-    `${3 - data.quality.bad_channels.length} / 3`;
-  $("quality").textContent = accepted
-    ? "三通道通過目前的品質門檻。"
-    : `${data.quality.bad_channels.join("、")} 未通過門檻，這次不提供分類。`;
-  $("channel-quality").innerHTML = ["O1", "Oz", "O2"]
-    .map((c, i) => {
-      const bad = data.quality.bad_channels.includes(c);
-      return `<span class="${bad ? "bad" : "good"}" title="峰對峰 ${data.quality.peak_to_peak_uv[i]} µV">${c} <i>${bad ? "!" : "✓"}</i></span>`;
-    })
+function render() {
+  const a = state.analysis,
+    p = state.profile;
+  $("report-id").textContent = `REF ${a.report_id}`;
+  $("source-badge").className = `source-badge ${a.source.kind}`;
+  $("source-badge").textContent =
+    `${a.source.kind === "public" ? "公開錄製回放" : a.source.kind === "synthetic" ? "合成訊號 · 非真人" : "使用者上傳 · 僅本次處理"} / ${a.source.label}`;
+  $("preview-label").textContent =
+    p.kind === "fictional" ? "完全虛構示範個案" : "自填匿名個案 · 本機組合";
+  $("report-case").textContent = p.code;
+  $("report-age").textContent =
+    `${p.age === null ? "未提供" : p.age + " 歲"} / ${p.kind === "fictional" ? "完全虛構" : "使用者自填"}`;
+  $("report-condition").textContent =
+    `${labels[a.source.condition]}（實驗標籤）`;
+  $("report-routine").textContent =
+    `睡眠 ${p.sleep_hours === null ? "未填" : p.sleep_hours + " h"} / 咖啡因 ${p.caffeine_servings === null ? "未填" : p.caffeine_servings + " 份"}`;
+  $("profile-context").textContent =
+    `${p.kind === "fictional" ? "本個案完全虛構，不對應真人。" : "匿名背景僅在瀏覽器組合，未送往分析 API。"} ${a.source.kind === "upload" ? "上傳數值來源由使用者提供，身份未獨立驗證。" : "目前 EEG 是示範資料，不對應此個案本人，不能作個案結論。"}${p.note ? " 背景：" + p.note : ""}`;
+  $("record-info").textContent =
+    `${fmt(a.duration_seconds)} 秒 · ${a.sample_rate} Hz · ${a.channels.length} 通道`;
+  $("included-count").textContent =
+    `${a.quality.included_windows} / ${a.quality.total_windows} 窗`;
+  $("included-time").textContent =
+    `${fmt(a.quality.included_seconds)} 秒納入平均`;
+  $("quality-title").textContent = a.quality.included_windows
+    ? "先確認品質，再閱讀頻帶"
+    : "暫不提供頻帶結論";
+  $("quality-description").textContent =
+    `${a.quality.total_windows - a.quality.included_windows} 窗被 Q1/Q2 技術門檻遮罩。疑似眼動／肌電只標記，不自動排除。尾段 ${fmt(a.quality.unscored_tail_seconds)} 秒保留原值、未納入四秒窗統計。`;
+  $("bands").innerHTML = a.bands.length
+    ? a.bands
+        .map(
+          (b) =>
+            `<div class="band-item"><div><strong>${bandLabels[b.name]}</strong><span>${b.low_hz}–${b.high_hz} Hz</span></div><b>${fmt(b.relative * 100)}<small>%</small></b><div class="band-track"><i style="width:${b.relative * 100}%"></i></div></div>`,
+        )
+        .join("")
+    : '<p class="scope-note">沒有可用的平均頻譜，不以零值假裝頻帶結果。</p>';
+  $("channel").innerHTML = a.channels
+    .map((c, i) => `<option value="${i}">${esc(c)}</option>`)
     .join("");
-  $("probability").innerHTML =
-    p === null
-      ? "—<small>%</small>"
-      : `${(p * 100).toFixed(1)}<small>%</small>`;
-  $("probability-fill").style.transition = p === null ? "none" : "width .7s";
-  document
-    .querySelector(".probability-track")
-    .classList.toggle("inactive", p === null);
-  $("probability-fill").style.width = p === null ? "0%" : `${p * 100}%`;
-  $("display-range").textContent = data.segment_signal.some((channel) =>
-    channel.some((value) => Math.abs(value) > 105),
-  )
-    ? "±100 µV · △ 超出顯示範圍"
-    : "顯示範圍 ±100 µV";
-  $("probability-pin").style.left =
-    p === null ? "0%" : `calc(${p * 100}% - 5px)`;
-  $("probability-pin").style.opacity = p === null ? 0 : 1;
-  $("score").textContent = accepted
-    ? "分數只代表睜眼／閉眼任務，不代表放鬆程度。"
-    : "品質未通過，任務分數與視覺回應皆已暫停。";
-  $("latency").textContent = `${Math.round(data.elapsed_ms)} ms`;
-  $("bands").innerHTML = Object.entries(data.bands)
+  $("window-select").innerHTML = a.windows
     .map(
-      ([key, value]) =>
-        `<div class="bar-row ${key}"><span>${{ theta: "Theta · 4–8", alpha: "Alpha · 8–13", beta: "Beta · 13–30" }[key]} Hz</span><div class="bar"><i style="width:${value * 100}%"></i></div><span>${(value * 100).toFixed(1)}%</span></div>`,
+      (w) =>
+        `<option value="${w.index}">${fmt(w.start)}–${fmt(w.end)} s</option>`,
     )
     .join("");
-  const m = data.evaluation;
-  $("baseline-accuracy").textContent =
-    `${(m.balanced_accuracy * 100).toFixed(1)}%`;
-  $("baseline-coverage").textContent =
-    `${m.test_windows} / ${m.test_total_windows}`;
-  $("metrics").textContent =
-    `${m.source === "synthetic" ? "合成訊號功能測試，不能代表真實 EEG 成效。" : "公開 EEG 小樣本基線；準確率僅針對通過品質門檻的測試窗。"}\n訓練規劃 S001–S006；實際有效受試者 ${m.effective_train_subjects.join("、")}。獨立測試 S007–S008。\n混淆矩陣（睜眼、閉眼）：${JSON.stringify(m.confusion_matrix)}。\n目前片段峰對峰：${data.quality.peak_to_peak_uv.join(" / ")} µV；任一通道 >200 µV 或標準差 <0.5 µV 即拒絕。\n模型分數未校準，不能解讀成疾病、壓力或療效。`;
-  $("summary").textContent = data.summary;
-  $("review-label").textContent =
-    `${accepted ? "品質通過" : "品質未通過"} · ${clock(data.request.start)}–${clock(data.request.start + data.request.duration)} · 可匯出`;
-  $("download").disabled = false;
-  $("wave-title").textContent = data.artifact_injected
-    ? "分析副本：含人工雜訊"
-    : "錄製訊號";
-  $("copy-note").hidden = !data.artifact_injected;
-  $("jump-summary").textContent = accepted
-    ? `品質通過 · 閉眼任務分數 ${(p * 100).toFixed(1)}%`
-    : "品質未通過 · 分類與回應已暫停";
-  $("view-response").classList.toggle("rejected", !accepted);
-  $("view-response").hidden = false;
-  updateSelection();
-}
-function fitCanvas(canvas) {
-  const ratio = Math.min(devicePixelRatio || 1, 2),
-    width = Math.max(1, canvas.clientWidth),
-    height = Math.max(1, canvas.clientHeight);
-  if (
-    canvas.width !== Math.round(width * ratio) ||
-    canvas.height !== Math.round(height * ratio)
-  ) {
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
-  }
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  ctx.clearRect(0, 0, width, height);
-  return { ctx, w: width, h: height };
-}
-function drawWave() {
-  const { ctx, w, h } = fitCanvas($("wave"));
-  if (!state.record) return;
-  const left = 42,
-    right = w - 11,
-    top = 11,
-    bottom = h - 25,
-    row = (bottom - top) / 3,
-    start = Number($("start").value),
-    duration = Number($("duration").value);
-  const data = state.result?.segment_signal || state.record.signal,
-    fs = state.result?.sample_rate || state.record.sample_rate,
-    offset = state.result ? 0 : Math.floor(start * fs),
-    n = Math.floor(duration * fs);
-  ctx.font = "10px -apple-system, sans-serif";
-  for (let t = 0; t <= 4; t++) {
-    const x = left + ((right - left) * t) / 4;
-    ctx.strokeStyle = "#eef2ed";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
-    ctx.stroke();
-    ctx.fillStyle = "#8d9b91";
-    ctx.textAlign = t === 4 ? "right" : t === 0 ? "left" : "center";
-    ctx.fillText(
-      `${(start + (duration * t) / 4).toFixed(duration === 4 ? 0 : 0)}s`,
-      x,
-      h - 7,
+  $("observations").innerHTML = a.observations
+    .map(
+      (o) =>
+        `<div class="observation"><span class="rule-pill">${esc(o.rule_id)}</span><div><h4>${esc(o.title)}</h4><p>${esc(o.text)}</p><div class="evidence-links">${o.evidence_windows
+          .slice(0, 8)
+          .map(
+            (i) =>
+              `<button class="evidence-link" data-window="${i}">${fmt(a.windows[i].start)}–${fmt(a.windows[i].end)}s</button>`,
+          )
+          .join(
+            "",
+          )}${o.evidence_windows.length > 8 ? '<span class="figure-caption">其餘見完整遮罩</span>' : ""}</div></div></div>`,
+    )
+    .join("");
+  const routine = [];
+  if (p.sleep_hours !== null)
+    routine.push(
+      `自填睡眠 ${p.sleep_hours} 小時／日：可補充錄製當天的作息紀錄供審閱者參考，不由 EEG 推測睡眠不足。`,
     );
+  if (p.caffeine_servings !== null)
+    routine.push(
+      `自填咖啡因 ${p.caffeine_servings} 份／日：可另註最後飲用時間，作為採集背景，不構成飲食或治療處方。`,
+    );
+  if (p.irregular_schedule)
+    routine.push(
+      "自填作息不固定／輪班：可補充採集時段與輪班紀錄，不能由頻帶反推。",
+    );
+  routine.push(
+    p.comfort === "quiet"
+      ? "舒適度示意偏好：安靜環境；只記錄偏好，不實際播放聲音。"
+      : p.comfort === "steady"
+        ? "舒適度示意偏好：柔和、常亮環境光；不控制設備、不閃爍。"
+        : "舒適度示意偏好：未指定；不輸出聲光。",
+  );
+  $("routine-notes").innerHTML = routine
+    .map((t) => `<p>${esc(t)}</p>`)
+    .join("");
+  $("window-table").innerHTML = a.windows
+    .map((w) => {
+      const events = a.events.filter((e) => e.window === w.index);
+      const rules = [...new Set(events.map((e) => e.rule_id))];
+      const affected = [...new Set(events.flatMap((e) => e.channels))];
+      return `<tr data-window="${w.index}" tabindex="0"><td>${fmt(w.start)}–${fmt(w.end)}</td><td>${rules.map((r) => `${r} ${ruleLabels[r]}`).join("；") || "無技術門檻／疑似標記"}</td><td>${esc(affected.join("、") || "—")}<br>全通道最大 PTP ${fmt(Math.max(...w.peak_to_peak_uv))} µV</td><td class="${w.included ? "" : "excluded"}">${w.included ? "納入" : "排除"}</td></tr>`;
+    })
+    .join("");
+  $("preprocessing").textContent =
+    a.preprocessing.method +
+    " " +
+    a.preprocessing.condition_policy +
+    " " +
+    a.preprocessing.tail_policy;
+  $("rule-list").innerHTML = a.rules
+    .map(
+      (r) =>
+        `<li><strong>${esc(r.id)} ${esc(r.label)}</strong>：${esc(r.definition)}</li>`,
+    )
+    .join("");
+  $("limitations").innerHTML = a.limitations
+    .map((t) => `<li>${esc(t)}</li>`)
+    .join("");
+  $("source-reference").textContent =
+    `來源：${a.source.label}。${a.source.notice} 參考：${a.source.reference}`;
+  $("source-hash").textContent =
+    `原始數值／上傳內容 SHA-256：${a.raw_sha256}；報告 ID 不包含個案欄位。`;
+  $("analysis-version").textContent = a.analysis_version;
+  document.querySelectorAll("[data-window]").forEach((element) => {
+    element.onclick = () => selectWindow(Number(element.dataset.window), true);
+    element.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectWindow(Number(element.dataset.window), true);
+      }
+    };
+  });
+  selectWindow(state.selected, false);
+  $("settings-summary").textContent =
+    `${p.kind === "fictional" ? "虛構個案" : "匿名自填"} · ${a.source.kind === "public" ? "公開 EEG" : a.source.kind === "synthetic" ? "合成示範" : "本次 CSV"}`;
+  drawAll();
+}
+function selectWindow(index, scroll) {
+  if (!state.analysis) return;
+  state.selected = Math.max(
+    0,
+    Math.min(index, state.analysis.windows.length - 1),
+  );
+  const w = state.analysis.windows[state.selected];
+  $("window-select").value = state.selected;
+  $("selected-evidence").textContent =
+    `${w.included ? "納入平均" : "排除平均"} · PTP ${state.analysis.channels.map((c, i) => `${c} ${fmt(w.peak_to_peak_uv[i])}`).join(" / ")} µV`;
+  $("prev-window").disabled = state.selected === 0;
+  $("next-window").disabled =
+    state.selected === state.analysis.windows.length - 1;
+  document
+    .querySelectorAll("#window-table tr")
+    .forEach((row) =>
+      row.classList.toggle(
+        "selected",
+        Number(row.dataset.window) === state.selected,
+      ),
+    );
+  drawAll();
+  if (scroll)
+    $("raw-chart").scrollIntoView({
+      behavior: reduced.matches ? "auto" : "smooth",
+      block: "center",
+    });
+}
+function canvas(id) {
+  const element = $(id),
+    w = Math.max(1, element.clientWidth),
+    h = Math.max(1, element.clientHeight),
+    ratio = Math.min(3, Math.max(2, devicePixelRatio || 1));
+  if (
+    element.width !== Math.round(w * ratio) ||
+    element.height !== Math.round(h * ratio)
+  ) {
+    element.width = Math.round(w * ratio);
+    element.height = Math.round(h * ratio);
   }
-  for (let ch = 0; ch < 3; ch++) {
-    const mid = top + row * (ch + 0.5),
-      scale = (row * 0.43) / 100;
-    ctx.textAlign = "left";
-    ctx.fillStyle = "#789486";
-    ctx.font = "10px ui-monospace, monospace";
-    ctx.fillText(["O1", "Oz", "O2"][ch], 7, mid + 3);
-    ctx.strokeStyle = "#e2eae2";
+  const ctx = element.getContext("2d");
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = "10px -apple-system, sans-serif";
+  return { ctx, w, h };
+}
+function axes(ctx, w, h, { xMin, xMax, yMin, yMax, yLabel, xLabel }) {
+  const box = { left: 44, right: w - 10, top: 18, bottom: h - 28 };
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const x = box.left + ((box.right - box.left) * i) / 4,
+      y = box.bottom - ((box.bottom - box.top) * i) / 4;
+    ctx.strokeStyle = "#e9efe3";
     ctx.beginPath();
-    ctx.moveTo(left, mid);
-    ctx.lineTo(right, mid);
+    ctx.moveTo(x, box.top);
+    ctx.lineTo(x, box.bottom);
+    ctx.moveTo(box.left, y);
+    ctx.lineTo(box.right, y);
     ctx.stroke();
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(left, top + row * ch, right - left, row);
-    ctx.clip();
-    ctx.strokeStyle = ["#278d8b", "#62a397", "#94b4a2"][ch];
-    ctx.lineWidth = 1.15;
-    ctx.beginPath();
-    let clipped = false;
-    for (let i = 0; i < n; i++) {
-      const value = data[ch][offset + i] || 0,
-        x = left + (i / (n - 1)) * (right - left),
-        y = mid - Math.max(-105, Math.min(105, value)) * scale;
-      clipped = clipped || Math.abs(value) > 105;
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    }
-    ctx.stroke();
-    ctx.restore();
-    if (clipped) {
-      ctx.fillStyle = "#b48a48";
-      ctx.beginPath();
-      ctx.moveTo(right - 7, mid - row * 0.4);
-      ctx.lineTo(right - 1, mid - row * 0.4);
-      ctx.lineTo(right - 4, mid - row * 0.4 + 5);
-      ctx.fill();
-    }
+    ctx.fillStyle = "#8b9e80";
+    ctx.textAlign = "center";
+    ctx.fillText(fmt(xMin + ((xMax - xMin) * i) / 4), x, h - 10);
+    ctx.textAlign = "right";
+    ctx.fillText(fmt(yMin + ((yMax - yMin) * i) / 4), box.left - 7, y + 3);
   }
-  if (state.playing) {
-    const x = left + ((state.position % duration) / duration) * (right - left);
-    ctx.strokeStyle = "#1a827b77";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
-    ctx.stroke();
-    ctx.fillStyle = "#1a827b";
-    ctx.beginPath();
-    ctx.arc(x, top, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  $("cursor").textContent =
-    `${(start + (state.position % duration)).toFixed(1)} 秒`;
+  ctx.fillStyle = "#69886b";
+  ctx.textAlign = "left";
+  ctx.fillText(yLabel, 4, 10);
+  ctx.textAlign = "right";
+  ctx.fillText(xLabel, w - 1, h - 1);
+  return box;
 }
 function drawOverview() {
-  const { ctx, w, h } = fitCanvas($("overview"));
-  if (!state.record) return;
-  const total = state.record.duration,
-    start = Number($("start").value),
-    duration = Number($("duration").value),
-    data = state.record.signal[0],
-    x0 = (start / total) * w,
-    x1 = ((start + duration) / total) * w;
-  ctx.fillStyle = "#f0f4ee";
-  ctx.fillRect(0, h / 2 - 5, w, 10);
-  ctx.fillStyle = "#a6c9b8";
-  ctx.fillRect(x0, 2, Math.max(x1 - x0, 2), h - 4);
-  for (let x = 0; x < w; x += 2) {
-    const index = Math.floor((x / w) * data.length),
-      value = Math.min(8, Math.abs(data[index] || 0) * 0.08 + 1);
-    ctx.strokeStyle = x >= x0 && x <= x1 ? "#3a8d7e" : "#c4d4c7";
+  if (!state.analysis) return;
+  const a = state.analysis,
+    { ctx, w, h } = canvas("overview"),
+    left = 8,
+    right = w - 8,
+    top = 7,
+    bottom = h - 19,
+    data = a.signal[state.channel];
+  for (const win of a.windows) {
+    const x = left + (win.start / a.duration_seconds) * (right - left),
+      width = ((win.end - win.start) / a.duration_seconds) * (right - left);
+    ctx.fillStyle = win.included ? "#f1f6ed" : "#e9d4b06b";
+    ctx.fillRect(x, top, width, bottom - top);
+    if (win.review_rules.length) {
+      ctx.fillStyle = "#79a4a381";
+      ctx.fillRect(x, top, width, 4);
+    }
+  }
+  const scale = Math.max(20, ...data.map(Math.abs)),
+    mid = (top + bottom) / 2;
+  ctx.strokeStyle = "#5b9480";
+  for (let pixel = 0; pixel < right - left; pixel++) {
+    const from = Math.floor((pixel / (right - left)) * data.length),
+      to = Math.max(
+        from + 1,
+        Math.floor(((pixel + 1) / (right - left)) * data.length),
+      );
+    let min = Infinity,
+      max = -Infinity;
+    for (let i = from; i < to; i++) {
+      min = Math.min(min, data[i]);
+      max = Math.max(max, data[i]);
+    }
     ctx.beginPath();
-    ctx.moveTo(x, h / 2 - value);
-    ctx.lineTo(x, h / 2 + value);
+    ctx.moveTo(left + pixel, mid - (max / scale) * (bottom - top) * 0.43);
+    ctx.lineTo(left + pixel, mid - (min / scale) * (bottom - top) * 0.43);
     ctx.stroke();
   }
-  ctx.strokeStyle = "#4c9a87";
+  const current = a.windows[state.selected];
+  ctx.strokeStyle = "#237e62";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(
+    left + (current.start / a.duration_seconds) * (right - left),
+    top,
+    ((current.end - current.start) / a.duration_seconds) * (right - left),
+    bottom - top,
+  );
+  ctx.fillStyle = "#90a184";
+  ctx.textAlign = "left";
+  ctx.fillText("0s", left, h - 4);
+  ctx.textAlign = "right";
+  ctx.fillText(`${fmt(a.duration_seconds)}s`, right, h - 4);
+}
+function drawRaw() {
+  if (!state.analysis) return;
+  const a = state.analysis,
+    win = a.windows[state.selected],
+    { ctx, w, h } = canvas("raw-chart"),
+    data = a.signal[state.channel].slice(
+      Math.round(win.start * a.sample_rate),
+      Math.round(win.end * a.sample_rate),
+    ),
+    max = Math.max(10, Math.ceil(Math.max(...data.map(Math.abs)) / 10) * 10),
+    box = axes(ctx, w, h, {
+      xMin: win.start,
+      xMax: win.end,
+      yMin: -max,
+      yMax: max,
+      yLabel: `${a.channels[state.channel]} · µV 原始值`,
+      xLabel: "秒",
+    });
+  if (!win.included || win.review_rules.length) {
+    ctx.fillStyle = win.included ? "#7ba1a111" : "#cfa3611a";
+    ctx.fillRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+    ctx.strokeStyle = win.included ? "#7ba1a1" : "#cfa361";
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(
+      box.left,
+      box.top,
+      box.right - box.left,
+      box.bottom - box.top,
+    );
+    ctx.setLineDash([]);
+  }
+  ctx.strokeStyle = "#287e69";
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(x0, 1);
-  ctx.lineTo(x0, h - 1);
-  ctx.moveTo(x1, 1);
-  ctx.lineTo(x1, h - 1);
+  data.forEach((value, i) => {
+    const x = box.left + (i / (data.length - 1)) * (box.right - box.left),
+      y = box.bottom - ((value + max) / (max * 2)) * (box.bottom - box.top);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
   ctx.stroke();
 }
-function drawLandscape() {
-  const { ctx, w, h } = fitCanvas($("landscape"));
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, "#b4d4d5");
-  sky.addColorStop(0.46, "#eee9d9");
-  sky.addColorStop(0.52, "#c3d9d4");
-  sky.addColorStop(1, "#6ca6a3");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-  const sunX = w * 0.72,
-    sunY = h * 0.25,
-    glow = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, w * 0.26);
-  glow.addColorStop(0, "#fff8dfd9");
-  glow.addColorStop(0.23, "#fcf2d39c");
-  glow.addColorStop(1, "#fcf2d300");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "#f9f0d4";
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, 14, 0, Math.PI * 2);
-  ctx.fill();
-  function mountain(color, y, points) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    ctx.lineTo(0, y * h);
-    for (let i = 0; i < points.length; i += 6)
-      ctx.bezierCurveTo(
-        points[i] * w,
-        points[i + 1] * h,
-        points[i + 2] * w,
-        points[i + 3] * h,
-        points[i + 4] * w,
-        points[i + 5] * h,
-      );
-    ctx.lineTo(w, h);
-    ctx.closePath();
-    ctx.fill();
+function drawPSD() {
+  if (!state.analysis) return;
+  const a = state.analysis,
+    { ctx, w, h } = canvas("psd-chart"),
+    power = a.psd.power_uv2_hz?.[state.channel];
+  if (!power) {
+    ctx.fillStyle = "#8b9c7e";
+    ctx.textAlign = "center";
+    ctx.fillText("無通過窗，不產生平均 PSD", w / 2, h / 2);
+    return;
   }
-  mountain(
-    "#8dabad",
-    0.44,
-    [
-      0.1, 0.27, 0.13, 0.36, 0.23, 0.34, 0.34, 0.32, 0.35, 0.48, 0.45, 0.44,
-      0.6, 0.4, 0.64, 0.33, 0.74, 0.37, 0.85, 0.4, 0.9, 0.33, 1, 0.42,
-    ],
-  );
-  mountain(
-    "#5e8e92",
-    0.46,
-    [
-      0.05, 0.4, 0.1, 0.45, 0.17, 0.4, 0.25, 0.35, 0.3, 0.47, 0.4, 0.47, 0.57,
-      0.48, 0.58, 0.4, 0.7, 0.45, 0.82, 0.49, 0.89, 0.38, 1, 0.44,
-    ],
-  );
-  const lake = ctx.createLinearGradient(0, h * 0.49, 0, h);
-  lake.addColorStop(0, "#c5dbd3");
-  lake.addColorStop(0.3, "#a1c5bf");
-  lake.addColorStop(1, "#3b7d84");
-  ctx.fillStyle = lake;
-  ctx.fillRect(0, h * 0.49, w, h * 0.51);
-  const phase =
-    state.playing && state.phase === "accepted" && !reducedMotion.matches
-      ? state.position * 0.8
-      : 0;
-  for (let i = 0; i < 28; i++) {
-    const y = h * (0.5 + i * 0.017),
-      spread = 20 + i * 5,
-      center = sunX + Math.sin(i * 1.6 + phase) * spread * 0.2;
-    ctx.strokeStyle = i % 3 === 0 ? "#f3ecd280" : "#e1eee943";
-    ctx.lineWidth = 0.6 + i * 0.025;
-    ctx.beginPath();
-    ctx.moveTo(center - spread, y);
-    ctx.bezierCurveTo(
-      center - spread * 0.3,
-      y + Math.sin(i + phase) * 1.7,
-      center + spread * 0.4,
-      y - 1,
-      center + spread,
-      y,
+  const values = power.map((v) => 10 * Math.log10(Math.max(v, 1e-12))),
+    min = Math.floor(Math.min(...values) / 10) * 10,
+    max = Math.max(min + 10, Math.ceil(Math.max(...values) / 10) * 10),
+    box = axes(ctx, w, h, {
+      xMin: 0.5,
+      xMax: 45,
+      yMin: min,
+      yMax: max,
+      yLabel: `${a.channels[state.channel]} · dB µV²/Hz`,
+      xLabel: "Hz",
+    });
+  for (const b of Object.values({
+    delta: [0.5, 4],
+    theta: [4, 8],
+    alpha: [8, 13],
+    beta: [13, 30],
+  })) {
+    ctx.fillStyle = "#76a7860b";
+    ctx.fillRect(
+      box.left + ((b[0] - 0.5) / 44.5) * (box.right - box.left),
+      box.top,
+      ((b[1] - b[0]) / 44.5) * (box.right - box.left),
+      box.bottom - box.top,
     );
-    ctx.stroke();
-    const shift = (i * 71) % w;
-    ctx.strokeStyle = "#1e677e24";
-    ctx.beginPath();
-    ctx.moveTo(shift, y + 5);
-    ctx.lineTo(Math.min(w, shift + 40 + i * 2), y + 5);
-    ctx.stroke();
   }
-  mountain(
-    "#356c70",
-    0.78,
-    [
-      0.07, 0.76, 0.1, 0.68, 0.16, 0.72, 0.2, 0.72, 0.2, 0.84, 0.28, 0.84, 0.35,
-      0.88, 0.38, 0.94, 0.47, 1, 0.6, 1, 0.79, 0.89, 0.84, 0.88, 0.93, 0.8,
-      0.94, 0.8, 1, 0.86,
-    ],
+  ctx.strokeStyle = "#397f67";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x =
+        box.left +
+        ((a.psd.frequencies_hz[i] - 0.5) / 44.5) * (box.right - box.left),
+      y = box.bottom - ((v - min) / (max - min)) * (box.bottom - box.top);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+}
+function drawTF() {
+  if (!state.analysis) return;
+  const a = state.analysis,
+    { ctx, w, h } = canvas("tf-chart"),
+    matrix = a.time_frequency.power_uv2_hz[state.channel],
+    flat = matrix.flat().map((v) => 10 * Math.log10(Math.max(v, 1e-12))),
+    min = Math.min(...flat),
+    max = Math.max(min + 1, Math.max(...flat)),
+    box = axes(ctx, w, h, {
+      xMin: 0,
+      xMax: a.windows.at(-1).end,
+      yMin: 0.5,
+      yMax: 30,
+      yLabel: `${a.channels[state.channel]} · Hz`,
+      xLabel: "秒",
+    }),
+    cw = (box.right - box.left) / matrix.length,
+    ch = (box.bottom - box.top) / matrix[0].length;
+  matrix.forEach((row, i) => {
+    row.forEach((p, j) => {
+      const ratio = (10 * Math.log10(Math.max(p, 1e-12)) - min) / (max - min);
+      ctx.fillStyle = `rgb(${Math.round(240 - 200 * ratio)},${Math.round(247 - 105 * ratio)},${Math.round(232 - 119 * ratio)})`;
+      ctx.fillRect(
+        box.left + i * cw,
+        box.bottom - (j + 1) * ch,
+        cw + 0.5,
+        ch + 0.5,
+      );
+    });
+    if (!a.windows[i].included) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(box.left + i * cw, box.top, cw, box.bottom - box.top);
+      ctx.clip();
+      ctx.strokeStyle = "#986a3866";
+      ctx.lineWidth = 1;
+      for (let y = box.top - 200; y < box.bottom; y += 9) {
+        ctx.beginPath();
+        ctx.moveTo(box.left + i * cw, y);
+        ctx.lineTo(box.left + (i + 1) * cw, y + cw);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  });
+  ctx.strokeStyle = "#244c35";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(
+    box.left + state.selected * cw,
+    box.top,
+    cw,
+    box.bottom - box.top,
   );
-  mountain(
-    "#204f59",
-    0.89,
-    [
-      0.04, 0.82, 0.07, 0.77, 0.13, 0.8, 0.17, 0.82, 0.15, 0.92, 0.27, 0.96,
-      0.45, 1, 0.57, 1, 0.67, 1, 0.82, 0.94, 0.84, 0.92, 0.92, 0.94, 1, 0.92, 1,
-      0.92, 1, 1, 1, 1,
-    ],
-  );
+  ctx.fillStyle = "#6c8568";
+  ctx.textAlign = "right";
+  ctx.fillText(`色階 ${fmt(min)} 至 ${fmt(max)} dB`, w - 4, 10);
 }
 function drawAll() {
-  drawWave();
+  if (!state.analysis || $("report").hidden) return;
   drawOverview();
-  drawLandscape();
+  drawRaw();
+  drawPSD();
+  drawTF();
 }
-function frame(t) {
-  if (!state.playing) return;
-  state.position += (t - state.lastFrame) / 1000;
-  state.lastFrame = t;
-  drawWave();
-  drawLandscape();
-  state.raf = requestAnimationFrame(frame);
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
-function setPlaying(value) {
-  cancelAnimationFrame(state.raf);
-  state.playing = value;
-  $("play").innerHTML = `<span>${value ? "Ⅱ" : "▶"}</span>`;
-  $("play").setAttribute("aria-label", value ? "暫停錄製" : "播放錄製");
-  $("scene-play").textContent = value ? "Ⅱ 暫停" : "▶ 回放";
-  $("scene-play").setAttribute("aria-label", value ? "暫停錄製" : "播放錄製");
-  if (value) {
-    state.lastFrame = performance.now();
-    state.raf = requestAnimationFrame(frame);
-  } else if (state.record) drawAll();
+function chooseFile(file) {
+  markDirty();
+  state.file = null;
+  $("file-name").textContent = "尚未選取檔案";
+  if (!file) {
+    updateActions();
+    return;
+  }
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    $("error").textContent = "此版只支援 UTF-8 CSV；不接受 EDF 或壓縮檔。";
+    $("eeg-file").value = "";
+    updateActions();
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    $("error").textContent = "檔案超過 8 MiB，請先截取需要的錄製。";
+    $("eeg-file").value = "";
+    updateActions();
+    return;
+  }
+  state.file = file;
+  $("file-name").textContent =
+    `${file.name} · ${(file.size / 1024).toFixed(1)} KiB（僅本機顯示檔名）`;
+  updateActions();
 }
-function queueAnalysis() {
-  clearTimeout(state.timer);
-  if (state.started && state.record)
-    state.timer = setTimeout(() => analyze(), 180);
-}
-function choose(value) {
-  state.closed = value;
-  $("open").setAttribute("aria-pressed", !value);
-  $("closed").setAttribute("aria-pressed", value);
-  load();
-}
-$("open").onclick = () => choose(false);
-$("closed").onclick = () => choose(true);
-$("source").onchange = load;
-$("subject").onchange = load;
-$("start").oninput = () => {
-  state.position = 0;
-  invalidate();
-  updateSelection();
-  drawAll();
-};
-$("start").onchange = queueAnalysis;
-$("duration").onchange = () => {
-  if (!state.record) return;
-  invalidate();
-  $("start").max = Math.floor(
-    state.record.duration - Number($("duration").value),
-  );
-  $("start").value = Math.min(Number($("start").value), Number($("start").max));
-  state.position = 0;
-  updateSelection();
-  drawAll();
-  queueAnalysis();
-};
-$("artifact").onchange = () => {
-  invalidate();
-  updateSelection();
-  drawAll();
-  if (state.started) analyze();
-};
-$("restore").onclick = () => {
-  $("artifact").checked = false;
-  $("artifact").onchange();
-};
-$("view-response").onclick = () => {
-  $("scene").scrollIntoView({
-    behavior: reducedMotion.matches ? "auto" : "smooth",
-    block: "start",
+$("case-preset").onchange = applyCase;
+for (const id of [
+  "case-code",
+  "age",
+  "sleep",
+  "caffeine",
+  "shift",
+  "profile-note",
+  "comfort",
+  "condition",
+])
+  $(id).addEventListener("input", () => {
+    markDirty();
+    $("case-preview").textContent =
+      $("case-preset").value === "fictional"
+        ? "DEMO-001 · 完全虛構"
+        : `${$("case-code").value.trim() || "匿名代號未填"} · 使用者自填`;
   });
-  $("scene").focus({ preventScroll: true });
+$("source").onchange = () => {
+  markDirty();
+  $("upload-box").hidden = $("source").value !== "upload";
+  updateActions();
 };
-$("scene-play").onclick = () => {
-  if (state.record) setPlaying(!state.playing);
+$("eeg-file").onchange = (event) => chooseFile(event.target.files[0]);
+$("generate").onclick = () => generate();
+$("channel").onchange = () => {
+  state.channel = Number($("channel").value);
+  selectWindow(state.selected, false);
 };
-$("play").onclick = () => {
-  if (state.record) setPlaying(!state.playing);
+$("window-select").onchange = () =>
+  selectWindow(Number($("window-select").value), false);
+$("prev-window").onclick = () => selectWindow(state.selected - 1, false);
+$("next-window").onclick = () => selectWindow(state.selected + 1, false);
+$("overview").onclick = (event) => {
+  if (!state.analysis || state.dirty) return;
+  const rect = $("overview").getBoundingClientRect(),
+    time =
+      Math.max(
+        0,
+        Math.min(1, (event.clientX - rect.left - 8) / (rect.width - 16)),
+      ) * state.analysis.duration_seconds;
+  selectWindow(Math.floor(time / state.analysis.window_seconds), false);
 };
-$("analyze").onclick = () => analyze({ play: !state.started });
-$("download").onclick = () => {
-  if (!state.result) return;
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(state.result, null, 2)], {
-      type: "application/json",
-    }),
-  );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "og-eeg-review.json";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+$("tf-chart").onclick = (event) => {
+  if (!state.analysis || state.dirty) return;
+  const rect = $("tf-chart").getBoundingClientRect(),
+    index = Math.floor(
+      Math.max(
+        0,
+        Math.min(0.999, (event.clientX - rect.left - 44) / (rect.width - 54)),
+      ) * state.analysis.windows.length,
+    );
+  selectWindow(index, false);
 };
-const compactLayout = matchMedia("(max-width: 720px)");
-function positionTimeline() {
-  const timeline = document.querySelector(".timeline");
-  const experience = document.querySelector(".experience");
-  if (compactLayout.matches && timeline.parentElement !== experience)
-    experience.append(timeline);
-  else if (!compactLayout.matches && timeline.parentElement === experience)
-    document.querySelector(".workbench").after(timeline);
-  drawAll();
-}
-compactLayout.addEventListener("change", positionTimeline);
-positionTimeline();
-new ResizeObserver(() => drawAll()).observe(
-  document.querySelector(".experience"),
-);
+$("print-report").onclick = () => {
+  if (state.analysis && !state.dirty && !state.busy) {
+    drawAll();
+    window.print();
+  }
+};
+$("export-json").onclick = () => {
+  if (state.analysis && !state.dirty)
+    download(
+      new Blob(
+        [
+          JSON.stringify(
+            {
+              case_background: state.profile,
+              analysis: state.analysis,
+              view: {
+                channel: state.analysis.channels[state.channel],
+                window: state.selected,
+              },
+            },
+            null,
+            2,
+          ),
+        ],
+        { type: "application/json" },
+      ),
+      `EEG-report-${state.analysis.report_id}.json`,
+    );
+};
+$("download-raw").onclick = async () => {
+  if (!state.analysis || state.dirty) return;
+  if (state.source === "upload" && state.file) {
+    download(state.file, "eeg-original.csv");
+    return;
+  }
+  try {
+    const r = await fetch(`/api/report/demo.csv?source=${state.source}`, {
+      cache: "no-store",
+    });
+    if (!r.ok) throw Error("無法下載示範原始資料");
+    download(await r.blob(), "eeg-original.csv");
+  } catch (error) {
+    $("error").textContent = error.message;
+  }
+};
+$("sample-csv").onclick = async () => {
+  try {
+    const r = await fetch("/api/report/demo.csv?source=synthetic-artifacts", {
+      cache: "no-store",
+    });
+    if (!r.ok) throw Error("示範 CSV 暫時無法下載");
+    download(await r.blob(), "eeg-synthetic-example.csv");
+  } catch (error) {
+    $("error").textContent = error.message;
+  }
+};
+$("clear-session").onclick = () => {
+  state.generation++;
+  state.controller?.abort();
+  state.analysis = null;
+  state.profile = null;
+  state.source = null;
+  state.file = null;
+  state.busy = false;
+  state.dirty = false;
+  $("eeg-file").value = "";
+  $("file-name").textContent = "尚未選取檔案";
+  $("case-preset").value = "fictional";
+  applyCase();
+  $("comfort").value = "none";
+  $("condition").value = "unspecified";
+  $("source").value = $("source").querySelector('option[value="public-open"]')
+    .disabled
+    ? "synthetic-artifacts"
+    : "public-open";
+  $("upload-box").hidden = true;
+  $("report").hidden = true;
+  $("draft-notice").hidden = true;
+  $("loading").hidden = false;
+  $("loading").querySelector("strong").textContent = "本次資料已清除";
+  $("loading").querySelector("p").textContent =
+    "重新選擇示範資料或上傳 CSV，即可建立下一份報告。";
+  $("workflow-details").open = true;
+  setPhase("已清除");
+  updateActions();
+};
+window.addEventListener("beforeprint", drawAll);
 window.addEventListener("resize", drawAll);
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) setPlaying(false);
+new ResizeObserver(drawAll).observe(document.querySelector(".report-column"));
+mobile.addEventListener("change", () => {
+  $("workflow-details").open = !mobile.matches || !state.analysis;
 });
-api("/api/catalog")
+fetch("/api/report/catalog", { cache: "no-store" })
+  .then(responseData)
   .then((c) => {
-    if (c.public_available) {
-      const option = $("source").options[1];
-      option.disabled = false;
-      option.textContent = "PhysioNet · 公開 EEG 錄製";
-      $("source").value = "physionet";
-      $("subject").value = "8";
+    for (const item of c.sources) {
+      const option = $("source").querySelector(`option[value="${item.id}"]`);
+      option.disabled = !item.available;
+      option.textContent = item.label + (item.available ? "" : "（未下載）");
     }
-    load();
+    $("source").value = c.public_available
+      ? "public-open"
+      : "synthetic-artifacts";
+    generate({ automatic: true });
   })
   .catch((error) => {
-    setPhase("error");
     $("error").textContent = error.message;
+    setPhase("服務未就緒");
+    updateActions();
   });

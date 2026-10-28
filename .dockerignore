@@ -5,3 +5,7 @@ artifacts
 __pycache__
 .pytest_cache
 .env
+output
+reports
+uploads
+*.csv

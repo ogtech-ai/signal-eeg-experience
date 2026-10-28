@@ -9,3 +9,14 @@
 - [BrainFlow](https://github.com/brainflow-dev/brainflow/blob/master/LICENSE)：主體 MIT，但目前 LICENSE 另有 SimpleBLE 使用／散布限制；本版未採用、不串接硬體。將來選板與藍牙模組前需重核對。
 
 執行套件：NumPy、SciPy、scikit-learn（BSD-3-Clause）；FastAPI、Uvicorn（MIT）；MNE（BSD-3-Clause）。開發：pytest（MIT）、HTTPX（BSD-3-Clause）、Playwright（Apache-2.0）。完整版本鎖在 requirements.lock；套件原始授權隨安裝的 distributions 保留，不將第三方程式複製到本 repo。合成訊號由本專案程式產生，隨原始碼 MIT，無真人資料。
+
+## 報告工作流 0.2
+
+本版報告不使用疾病或心理分類模型。數學實作採 SciPy Welch；規則 Q1/Q2/A1/A2 為明示且未經臨床驗證的啟發式，不能聲稱等同 autoreject 或 MNE 偽跡偵測。
+
+- SciPy Welch 官方文件：https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html
+- MNE 預處理概觀（保留資料、標記偽跡的設計參考）：https://mne.tools/stable/auto_tutorials/preprocessing/10_preprocessing_overview.html
+- MNE 頻譜：https://mne.tools/stable/auto_tutorials/time-freq/10_spectrum_class.html
+- MNE muscle 範例使用110–140Hz，本版公開160Hz資料不能套用該頻段：https://mne.tools/stable/auto_examples/preprocessing/muscle_detection.html
+
+上傳 CSV 不需外部 parser；採 Python 標準 csv 並嚴格驗證有界數值。PDF 由使用者瀏覽器列印，不依賴付費服務。報告中虛構個案與公開受試者無關。原始樣本、時間軸與品質遮罩分開保留，來源授權不因衍生報告而消失。

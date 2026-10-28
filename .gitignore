@@ -8,3 +8,7 @@ data/*
 *.joblib
 .env
 artifacts/
+output/
+reports/
+uploads/
+*.csv

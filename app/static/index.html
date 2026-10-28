@@ -3,320 +3,384 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>OG Technology · EEG 體驗室</title>
+    <title>OG Technology · EEG 檢測報告工作台</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
     <header class="app-header">
-      <a class="brand" href="/" aria-label="OG Technology EEG 體驗室"
+      <a class="brand" href="/"
         ><span class="brand-mark">og<span>·</span></span
-        ><span class="brand-name">OG Technology</span
-        ><span class="brand-divider"></span
-        ><span class="product-name">EEG 體驗室</span></a
-      >
-      <div class="header-context">
-        <span class="replay-label"
-          ><span class="tiny-wave">∿</span> 公開錄製回放</span
-        ><span class="research-label">研究展示 · 非醫療用途</span>
-      </div>
+        ><strong>OG Technology</strong><i></i><span>EEG 檢測報告工作台</span></a
+      ><span class="header-note">技術觀察 · 待專業確認</span>
     </header>
     <main>
-      <section class="page-heading">
+      <section class="workspace-title">
         <div>
-          <p class="eyebrow">SIGNAL INTO EXPERIENCE</p>
-          <h1>讓訊號，成為看得見的回應。</h1>
-          <p class="subtitle">
-            回放一段公開 EEG，體驗訊號品質與模型判讀如何改變視窗。
-          </p>
+          <p class="eyebrow">SIGNAL REVIEW / REPORT WORKSPACE</p>
+          <h1>從一段訊號，建立可追溯的報告。</h1>
+          <p>個案背景、品質標記與頻譜證據，在同一份報告中審閱。</p>
         </div>
-        <div class="heading-actions">
-          <label class="source-picker"
-            ><span>資料來源</span
-            ><select id="source">
-              <option value="synthetic">合成訊號 · 功能測試</option>
-              <option value="physionet" disabled>PhysioNet · 尚未下載</option>
-            </select></label
-          ><button id="analyze" class="primary" disabled>
-            <span class="button-play">▶</span
-            ><span id="analyze-label">開始體驗</span><span>↗</span>
+        <div class="top-actions">
+          <button id="clear-session" class="text-button">清除本次資料</button
+          ><button id="print-report" class="primary" disabled>
+            列印／另存 PDF ↗
           </button>
         </div>
       </section>
-      <div class="first-use" id="first-use">
-        <span class="mobile-guide">開始體驗 → 切換樣本 → 試試雜訊</span>
-        <span class="guide-title">從這裡開始</span
-        ><span><b>1</b> 選個錄製樣本</span><i></i
-        ><span><b>2</b> 開始回放與分析</span><i></i
-        ><span><b>3</b> 切換樣本，看見回應</span>
-      </div>
       <div class="workbench">
-        <section class="experience" aria-label="訊號與視覺回應">
-          <div id="scene" class="scene" data-state="ready" tabindex="-1">
-            <div class="scene-toolbar">
-              <span class="scene-label"
-                ><span class="tiny-wave">∿</span> 訊號視窗</span
-              >
-              <div class="scene-tools">
-                <span id="scene-mode">等待開始</span
-                ><button
-                  id="scene-play"
-                  class="scene-play"
-                  disabled
-                  aria-label="播放錄製"
-                >
-                  ▶ 回放
-                </button>
-              </div>
+        <aside class="workflow" aria-label="報告資料設定">
+          <details id="workflow-details" open>
+            <summary class="workflow-summary">
+              <strong>個案與訊號設定</strong
+              ><span id="settings-summary">完全虛構示範</span><i>＋</i>
+            </summary>
+            <div class="workflow-heading">
+              <span class="workspace-dot"></span><strong>建立這次報告</strong
+              ><span id="phase" role="status" aria-live="polite">載入示範</span>
             </div>
-            <div class="scene-window" id="aperture">
-              <canvas
-                id="landscape"
-                aria-label="模型任務分數驅動的風景視窗"
-              ></canvas>
-            </div>
-            <div class="lens-outline" aria-hidden="true"></div>
-            <div class="scene-center" id="scene-intro">
-              <span class="scene-monogram">∿</span>
-              <p>一段訊號，一次可見的回應。</p>
-              <span>按下「開始體驗」</span>
-            </div>
-            <div class="scene-caption">
-              <div>
-                <span class="caption-eyebrow">MODEL RESPONSE</span
-                ><strong id="prediction">準備就緒</strong>
-              </div>
-              <p id="response-note">視窗開合將由閉眼任務分數控制</p>
-            </div>
-            <div class="scene-paused" id="scene-paused" hidden>
-              品質未通過 · 視覺回應已暫停
-            </div>
-          </div>
-          <p id="playback-note" class="playback-note">
-            4 秒片段循環回放；分數為整段分析結果，不隨波峰即時重算。
-          </p>
-          <div class="signal-panel">
-            <div class="signal-heading">
-              <div>
-                <span class="tiny-wave">∿</span>
-                <h2 id="wave-title">錄製訊號</h2>
-                <span class="channel-count">3 通道</span>
-              </div>
-              <span id="provenance">正在載入樣本</span>
-            </div>
-            <div class="chart-wrap">
-              <canvas
-                id="wave"
-                role="img"
-                aria-label="O1、Oz、O2 三通道 EEG 波形與時間刻度"
-              ></canvas>
-            </div>
-            <div class="chart-footer">
-              <span
-                ><span id="display-range">顯示範圍 ±100 µV</span
-                ><span class="desktop-only">
-                  · 分析使用原始 160 Hz 訊號</span
-                ></span
-              ><span id="cursor">0.0 秒</span>
-            </div>
-            <p id="copy-note" class="copy-note" hidden>
-              這是加入人工脈衝的分析副本；原始錄製未更動。
-            </p>
-          </div>
-        </section>
-        <aside class="inspector" aria-label="樣本選擇與分析狀態">
-          <section class="quality-section">
-            <div class="section-title">
-              <h2>訊號品質</h2>
-              <span
-                class="info-label"
-                title="峰對峰超過 200 µV，或標準差低於 0.5 µV 的通道會被拒絕。啟發式門檻，非臨床認證。"
-                >i</span
-              >
-            </div>
-            <div class="quality-heading">
-              <span id="quality-indicator" class="quality-indicator"></span
-              ><strong id="status" role="status" aria-live="polite"
-                >等待分析</strong
-              ><span id="quality-count">— / 3</span>
-            </div>
-            <p id="quality">開始體驗後，先檢查三通道訊號。</p>
-            <div id="channel-quality" class="channel-quality">
-              <span>O1 <i>—</i></span
-              ><span>Oz <i>—</i></span
-              ><span>O2 <i>—</i></span>
-            </div>
-          </section>
-          <section class="sample-section">
-            <div class="section-title">
-              <h2>選擇錄製樣本</h2>
-              <span class="small-label">BASELINE</span>
-            </div>
-            <div class="sample-switch">
-              <button id="open" aria-pressed="true">
-                <svg viewBox="0 0 30 20" fill="none" aria-hidden="true">
-                  <path d="M2 10S7 3 15 3s13 7 13 7-5 7-13 7S2 10 2 10Z" />
-                  <circle cx="15" cy="10" r="4" /></svg
-                ><strong>睜眼</strong><span>R01 · 睜眼基線</span
-                ><i class="radio-mark"></i></button
-              ><button id="closed" aria-pressed="false">
-                <svg viewBox="0 0 30 20" fill="none" aria-hidden="true">
-                  <path
-                    d="M3 7s5 7 12 7S27 7 27 7M7 12l-2 4m9-2v4m9-6 2 4"
-                  /></svg
-                ><strong>閉眼</strong><span>R02 · 閉眼基線</span
-                ><i class="radio-mark"></i>
-              </button>
-            </div>
-            <p class="sample-caption" id="sample-caption">
-              公開受試者的錄製，並非目前使用者的腦波。
-            </p>
-          </section>
-          <section class="response-section">
-            <div class="section-title">
-              <h2>模型回應</h2>
-              <span id="latency" class="small-label">CPU 推論</span>
-            </div>
-            <div class="score-row">
-              <span>閉眼任務分數</span
-              ><strong id="probability">—<small>%</small></strong>
-            </div>
-            <div class="probability-track">
-              <span id="probability-fill"></span><i id="probability-pin"></i>
-            </div>
-            <div class="probability-labels">
-              <span>偏向睜眼</span><span>偏向閉眼</span>
-            </div>
-            <p id="score">分類任務分數，並非情緒或健康指標。</p>
-          </section>
-          <section class="artifact-section">
-            <label class="switch-row" for="artifact"
-              ><span
-                ><strong>試試雜訊攔截</strong
-                ><small>在分析副本加入人工脈衝</small></span
-              ><span class="switch"
-                ><input
-                  id="artifact"
-                  type="checkbox" /><span></span></span></label
-            ><button id="restore" class="text-button" hidden>
-              恢復原始訊號 ↗
-            </button>
-          </section>
-          <button id="view-response" class="view-response" hidden>
-            <span id="jump-summary">分析結果已更新</span
-            ><strong>查看視覺回應 ↑</strong>
-          </button>
-          <details class="advanced">
-            <summary>片段設定 <span>＋</span></summary>
-            <div class="advanced-fields">
+            <section class="input-step">
+              <h2><span>01</span> 個案背景</h2>
               <label
-                >測試受試者<select id="subject">
-                  <option value="7">S007</option>
-                  <option value="8">S008</option>
-                </select></label
-              ><label
-                >分析長度<select id="duration">
-                  <option value="4">4 秒</option>
-                  <option value="8">8 秒</option>
+                >個案資料<select id="case-preset">
+                  <option value="fictional">虛構示範個案 A · 非真人</option>
+                  <option value="custom">自行填寫 · 僅本機使用</option>
                 </select></label
               >
-            </div>
-            <p>
-              預設公開展示 S008 的 12–16
-              秒，為已知品質通過片段。可在時間軸改選其他位置。
+              <p id="case-preview" class="case-preview">
+                DEMO-001 · 32 歲 · 完全虛構
+              </p>
+              <details id="profile-editor">
+                <summary>基本資料與作息 <span>＋</span></summary>
+                <div class="field-grid">
+                  <label
+                    >匿名個案代號<input
+                      id="case-code"
+                      value="DEMO-001"
+                      maxlength="32"
+                      autocomplete="off"
+                      readonly /></label
+                  ><label
+                    >年齡（選填）<input
+                      id="age"
+                      type="number"
+                      min="1"
+                      max="120"
+                      value="32"
+                      readonly /></label
+                  ><label
+                    >自填睡眠／日（小時）<input
+                      id="sleep"
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="0.5"
+                      value="5.5"
+                      readonly /></label
+                  ><label
+                    >自填咖啡因／日（份）<input
+                      id="caffeine"
+                      type="number"
+                      min="0"
+                      max="20"
+                      value="2"
+                      readonly
+                  /></label>
+                </div>
+                <label class="checkbox-row"
+                  ><input
+                    id="shift"
+                    type="checkbox"
+                    disabled
+                  />作息不固定／輪班（自填）</label
+                ><label
+                  >補充背景（選填）<textarea
+                    id="profile-note"
+                    maxlength="240"
+                    rows="2"
+                    readonly
+                  >
+完全虛構的流程示範，不對應任何真人。</textarea
+                  >
+                </label>
+                <p class="input-note">
+                  請使用匿名代號，不填姓名、身分證或聯絡資料。這些欄位只留在瀏覽器記憶體，不送往分析
+                  API。
+                </p>
+              </details>
+            </section>
+            <section class="input-step">
+              <h2><span>02</span> 腦波資料</h2>
+              <label
+                >選擇來源<select id="source">
+                  <option value="synthetic-artifacts">
+                    合成示範 · 含人工偽跡
+                  </option>
+                  <option value="synthetic-clean">合成示範 · 乾淨訊號</option>
+                  <option value="public-open" disabled>
+                    公開 EEG · S008 睜眼（載入中）
+                  </option>
+                  <option value="public-closed" disabled>
+                    公開 EEG · S008 閉眼（載入中）
+                  </option>
+                  <option value="upload">上傳我的 CSV · 僅本次處理</option>
+                </select></label
+              >
+              <div id="upload-box" hidden>
+                <label class="file-drop" for="eeg-file"
+                  ><span>↑</span><strong>選擇 EEG CSV</strong
+                  ><small>不公開保存，不傳第三方</small
+                  ><input id="eeg-file" type="file" accept=".csv,text/csv"
+                /></label>
+                <p id="file-name" class="input-note">尚未選取檔案</p>
+                <label
+                  >實驗條件（使用者標記）<select id="condition">
+                    <option value="unspecified">未註明</option>
+                    <option value="eyes_open">睜眼</option>
+                    <option value="eyes_closed">閉眼</option>
+                  </select></label
+                >
+              </div>
+              <details class="format-help">
+                <summary>支援格式與隱私 <span>＋</span></summary>
+                <p>
+                  UTF-8 CSV；首欄 <code>time_s</code> 從 0 開始，後接 1–8 個
+                  <code>通道_uV</code>，例如 O1_uV。128–512 Hz、等間隔、8–120
+                  秒、最多 8 MiB。此版不接收 EDF／EOG／EMG，不猜單位或補值。
+                </p>
+                <p>
+                  原始 CSV
+                  留在本機檔案物件；分析服務只在記憶體處理，不存檔、不記內容
+                  log、不共享個案。重新整理或清除後釋放工作階段；不承諾安全抹除裝置記憶體。
+                </p>
+                <button id="sample-csv" class="text-button">
+                  下載合規示範 CSV ↓
+                </button>
+              </details>
+            </section>
+            <section class="input-step comfort-step">
+              <h2><span>03</span> 審閱偏好</h2>
+              <label
+                >舒適度示意（非處方）<select id="comfort">
+                  <option value="none">不指定</option>
+                  <option value="quiet">偏好安靜環境</option>
+                  <option value="steady">偏好柔和、常亮環境光</option>
+                </select></label
+              >
+              <p class="input-note">
+                只記錄偏好；不播放聲音、不閃光、不控制設備，也沒有醫療頻率建議。
+              </p>
+            </section>
+            <button id="generate" class="primary generate-button">
+              產生檢測報告 <span>↗</span>
+            </button>
+            <p id="error" role="alert"></p>
+            <p class="privacy-caption">
+              沒有疾病偵測模型或付費 LLM。<br />幸福腦設備尚未串接。
             </p>
           </details>
-          <p id="error" role="alert"></p>
         </aside>
+        <section class="report-column" aria-label="報告預覽">
+          <div class="preview-toolbar">
+            <div>
+              <span class="paper-icon">≋</span><strong>報告預覽</strong
+              ><span id="preview-label">示範資料</span>
+            </div>
+            <button id="export-json" class="secondary" disabled>
+              匯出證據 JSON ↓
+            </button>
+          </div>
+          <div id="draft-notice" class="draft-notice" hidden>
+            資料已修改，請重新產生報告；目前預覽為上一份結果，不能匯出。
+          </div>
+          <div id="loading" class="loading">
+            <span class="loading-mark">∿</span
+            ><strong>建立第一份示範報告</strong>
+            <p>從真實數值計算頻譜、品質遮罩與規則證據。</p>
+          </div>
+          <article id="report" class="report-paper" hidden>
+            <div class="paper-topline">
+              <span>OG TECHNOLOGY / EEG TECHNICAL REVIEW</span
+              ><span id="report-id"></span>
+            </div>
+            <div class="report-heading">
+              <div>
+                <p id="source-badge" class="source-badge"></p>
+                <h2>EEG 訊號檢測報告</h2>
+                <p>技術觀察，待專業確認</p>
+              </div>
+              <div class="report-stamp">
+                SIGNAL<br /><strong>REVIEW</strong><span>非醫療診斷</span>
+              </div>
+            </div>
+            <section class="case-strip" aria-label="個案基本資料">
+              <div><span>匿名個案</span><strong id="report-case"></strong></div>
+              <div>
+                <span>年齡／資料類型</span><strong id="report-age"></strong>
+              </div>
+              <div>
+                <span>實驗條件</span><strong id="report-condition"></strong>
+              </div>
+              <div>
+                <span>自填作息</span><strong id="report-routine"></strong>
+              </div>
+            </section>
+            <p id="profile-context" class="report-context"></p>
+            <section class="report-section">
+              <div class="section-heading">
+                <h3>01 <span>錄製範圍與品質</span></h3>
+                <span id="record-info"></span>
+              </div>
+              <div class="quality-summary">
+                <div>
+                  <span>納入平均頻譜</span><strong id="included-count"></strong
+                  ><small id="included-time"></small>
+                </div>
+                <div class="quality-description">
+                  <strong id="quality-title"></strong>
+                  <p id="quality-description"></p>
+                </div>
+              </div>
+              <div class="legend">
+                <span><i class="exclude-swatch"></i>技術門檻排除窗</span
+                ><span><i class="review-swatch"></i>疑似偽跡，待確認</span
+                ><span>睜／閉眼是條件，不作排除依據</span>
+              </div>
+            </section>
+            <section class="report-section">
+              <div class="section-heading">
+                <h3>02 <span>頻帶相對功率</span></h3>
+                <span>分母：通過窗的 0.5–30 Hz 功率</span>
+              </div>
+              <div id="bands" class="band-summary"></div>
+              <p class="figure-caption">
+                頻帶下界含、上界不含；邊界以插值積分。沒有年齡常模，也不能由比例推測放鬆、疾病或療效。
+              </p>
+            </section>
+            <section class="report-section raw-section">
+              <div class="section-heading">
+                <h3>03 <span>原始時序與品質標記</span></h3>
+                <label class="channel-picker"
+                  >通道<select id="channel"></select
+                ></label>
+              </div>
+              <p class="figure-caption">
+                原始數值未改動。選取四秒窗只定位圖形，不改變整份報告的平均頻譜。
+              </p>
+              <canvas
+                id="overview"
+                role="img"
+                aria-label="全段原始時序與品質遮罩"
+              ></canvas>
+              <div class="segment-control">
+                <button
+                  id="prev-window"
+                  class="icon-button"
+                  aria-label="上一個片段"
+                >
+                  ←</button
+                ><label>定位片段<select id="window-select"></select></label
+                ><button
+                  id="next-window"
+                  class="icon-button"
+                  aria-label="下一個片段"
+                >
+                  →</button
+                ><span id="selected-evidence"></span>
+              </div>
+              <canvas
+                id="raw-chart"
+                role="img"
+                aria-label="選取片段原始 EEG 時序"
+              ></canvas>
+            </section>
+            <div class="spectral-grid">
+              <section class="report-section">
+                <div class="section-heading">
+                  <h3>04 <span>平均功率頻譜 PSD</span></h3>
+                </div>
+                <canvas
+                  id="psd-chart"
+                  role="img"
+                  aria-label="通過窗平均功率頻譜"
+                ></canvas>
+                <p class="figure-caption">
+                  只平均通過窗，不拼接時序；單位 dB µV²/Hz。
+                </p>
+              </section>
+              <section class="report-section">
+                <div class="section-heading">
+                  <h3>05 <span>時間－頻率分布</span></h3>
+                </div>
+                <canvas
+                  id="tf-chart"
+                  role="img"
+                  aria-label="每四秒窗的實際 Welch 頻譜"
+                ></canvas>
+                <p class="figure-caption">
+                  每四秒窗 Welch PSD，非小波；斜線為排除窗，仍保留原值供審閱。
+                </p>
+              </section>
+            </div>
+            <section class="report-section observations-section">
+              <div class="section-heading">
+                <h3>06 <span>有依據的技術觀察</span></h3>
+                <span>固定規則模板 · 非 LLM</span>
+              </div>
+              <div id="observations"></div>
+              <h4>自填背景與舒適度示意</h4>
+              <div id="routine-notes"></div>
+              <p class="scope-note">
+                以上作息提示只來自自填欄位，不是 EEG
+                推測。舒適度偏好不輸出聲光、不包含閃爍或特定醫療頻率處方。
+              </p>
+            </section>
+            <section class="report-section event-section">
+              <div class="section-heading">
+                <h3>07 <span>需複核片段與完整遮罩</span></h3>
+                <span>點擊任一列可定位原始訊號</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>時間（秒）</th>
+                      <th>規則／品質標記</th>
+                      <th>通道</th>
+                      <th>平均頻譜</th>
+                    </tr>
+                  </thead>
+                  <tbody id="window-table"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="report-section methods-section">
+              <div class="section-heading">
+                <h3>08 <span>方法、來源與限制</span></h3>
+              </div>
+              <p id="preprocessing"></p>
+              <ul id="rule-list"></ul>
+              <ul id="limitations"></ul>
+              <p id="source-reference"></p>
+              <p id="source-hash"></p>
+              <p class="scope-note">
+                個案欄位只在目前瀏覽器組合。PDF／JSON
+                會包含自填資料，請自行保管；不會公開保存報告。原始資料與所有遮罩可另行下載核對。
+              </p>
+            </section>
+            <div class="report-end">
+              <span>OG TECHNOLOGY · 技術觀察，待專業確認</span
+              ><span id="analysis-version"></span>
+            </div>
+          </article>
+          <div class="report-actions">
+            <button id="download-raw" class="text-button" disabled>
+              下載原始 CSV ↓</button
+            ><span>原始資料保留，不做自動修補或診斷。</span>
+          </div>
+        </section>
       </div>
-      <section class="timeline" aria-label="錄製回放時間軸">
-        <button id="play" class="play-button" disabled aria-label="播放錄製">
-          <span>▶</span>
-        </button>
-        <div class="timeline-title">
-          <strong>錄製時間軸</strong
-          ><span id="segment-label">4 秒片段循環回放</span>
-        </div>
-        <div class="timeline-track">
-          <div class="timeline-top">
-            <span id="time">00:00 — 00:04</span
-            ><span id="total-time">01:00</span>
-          </div>
-          <div class="scrubber">
-            <canvas id="overview" aria-hidden="true"></canvas
-            ><input
-              id="start"
-              aria-label="選擇分析片段起點"
-              type="range"
-              min="0"
-              max="55"
-              step="1"
-              value="0"
-              disabled
-            />
-          </div>
-          <div class="timeline-ticks" aria-hidden="true">
-            <span>00:00</span><span>00:15</span><span>00:30</span
-            ><span>00:45</span><span id="end-time">01:00</span>
-          </div>
-        </div>
-        <div class="selection-key"><i></i>分析片段</div>
-      </section>
-      <section class="review">
-        <details id="evidence">
-          <summary>
-            <span
-              ><span class="review-icon">≋</span
-              ><strong>分析證據與審閱摘要</strong
-              ><small id="review-label"
-                >開始分析後，可追溯每一個結果</small
-              ></span
-            ><span class="expand-label">展開 <i>＋</i></span>
-          </summary>
-          <div class="review-body">
-            <section>
-              <h2>頻帶相對功率</h2>
-              <div id="bands"><p>分析後顯示 4–30 Hz 頻帶功率比例。</p></div>
-              <p class="review-note">Welch 頻譜 · 三個枕葉通道平均</p>
-              <div class="baseline-metrics">
-                <div>
-                  <span>通過窗的平衡準確率</span
-                  ><strong id="baseline-accuracy">—</strong>
-                </div>
-                <div>
-                  <span>測試窗品質覆蓋率</span
-                  ><strong id="baseline-coverage">—</strong>
-                </div>
-              </div>
-              <p id="metrics">小樣本研究基線，不代表設備或整體產品成效。</p>
-            </section>
-            <section class="summary-section">
-              <div class="section-title">
-                <h2>可追溯摘要</h2>
-                <button id="download" class="secondary" disabled>
-                  匯出 JSON ↓
-                </button>
-              </div>
-              <p id="summary">
-                尚未產生摘要。按下「開始體驗」，從實際訊號計算第一個結果。
-              </p>
-              <p class="review-note">
-                摘要使用固定模板；沒有付費 API 或生成式診斷。
-              </p>
-            </section>
-          </div>
-        </details>
-      </section>
       <footer>
-        <p>
-          <span class="footer-dot"></span>公開／合成錄製展示 ·
-          幸福腦設備尚未串接 · 非醫療評估
-        </p>
-        <a
-          href="https://physionet.org/content/eegmmidb/1.0.0/"
-          target="_blank"
-          rel="noreferrer"
-          >資料來源與授權 ↗</a
-        >
+        EEG 檢測報告工作台 · 本機／工作階段分析 · 不提供疾病診斷或改善療效承諾
       </footer>
     </main>
     <script src="/static/app.js"></script>
