@@ -2,11 +2,11 @@
 
 環境：macOS arm64、Python 3.12.8、CPU；依賴完整鎖定於 requirements.lock。工作區為獨立新專案，父層與本工作區未找到 AGENTS.md；已查閱可用技能目錄，未找到適用的一般工程技能。這是實際多檔案程式專案，不採用靜態預覽／代建網站技能。
 
-- API／數值測試：5 passed（含公開資料整合測試；CI 無資料時 4 passed / 1 skipped）。涵蓋 alpha 頻譜差異、訓練／測試受試者隔離、獨立合成訊號預測、平坦／脈衝拒絕、完整 API、邊界及未知資料來源拒絕。
+- API／數值測試：6 passed（含公開資料整合測試；CI 無資料時 5 passed / 1 skipped）。涵蓋 alpha 頻譜差異、訓練／測試受試者隔離、獨立合成訊號預測、平坦／脈衝拒絕、完整 API、邊界及未知資料來源拒絕。
 - Playwright Chromium：合成與公開 EEG 兩種模式完整互動通過，含睜閉眼分類與場景幾何變化、人工雜訊拒絕、波形播放游標、JSON 下載、390px 手機溢出與 JS error 檢查。桌面／手機截圖在本機 artifacts/，已目視檢查。
 - pip check：No broken requirements found。
-- Docker：有 CLI，但 daemon 未啟動，故本機未完成 build/run。標準 CI 包含 docker build，尚待公司 repo 發布後實際執行。
-- GitHub：公司連接器讀取身份確定為 ogtech-jeffhong；ogtech-ai/eeg-experience-demo 與依最新命名規範之 ogtech-ai/signal-eeg-experience 查詢均回 404（不能保證不存在，也可能不可見），未覆寫任何 repo。可用工具缺少 create-repository；本機 gh 只有失效的 jeffhong824 與 homee-jeff-hong 登入，未採用。發布尚未完成，CI 尚無雲端執行結果。
+- Docker：已啟動既有 Docker Desktop（沒有安裝、接受條款或改安全設定），daemon 27.4.0；Linux arm64 映像 build/run 通過。容器非 root UID 1000、2 CPU／2 GiB 上限、僅 127.0.0.1:8001、公開資料唯讀掛載。健康 HTTP 200，合成／公開 EEG 分析與人工雜訊拒絕通過。映像約 174 MB，amd64 尚未在本機驗證；標準 CI 將於公司 repo 發布後執行。
+- GitHub：公司連接器讀取身份確定為 ogtech-jeffhong；ogtech-ai/eeg-experience-demo 與依最新命名規範之 ogtech-ai/signal-eeg-experience 查詢均回 404（不能保證不存在，也可能不可見），未覆寫任何 repo。可用工具缺少 create-repository；本機 gh 只有失效的 jeffhong824 與 homee-jeff-hong 登入，未採用。瀏覽器亦確認登入為公司 ogtech-jeffhong，具有組織 Owner 角色，signal-eeg-experience 名稱可用；Public 建立步驟仍未完成，CI 尚無雲端執行結果。
 - GCP：未提供 VM／身份，未遠端部署。部署 workflow 是明確 fail-closed 的手動 preflight 範本。
 
 合成資料獨立受試者功能測試：180 訓練片段、60 測試片段，平衡準確率 100%，混淆矩陣 [[30,0],[0,30]]；此結果來自刻意可分離的人工訊號，**不能當作真實 EEG 表現**。
@@ -32,4 +32,8 @@
 
 公開介面預設展示 S008、12–16 秒，是已知品質通過的示範片段；可自行拖曳其他片段觀察拒絕。這不是隨機抽樣成效。完整品質通過數量也隨 API evaluation 回傳。
 
-最終驗證：ruff check、node --check、git diff --check、pip check 通過。16 份 manifest 均有不同 SHA-256。macOS CPU 初次公開資料訓練加單次推論量測約 56 ms（不是效能保證）；後續快取模型。pytest 有一個上游 Starlette/HTTPX 棄用警告，不影響 5 項測試通過。
+最終驗證：ruff check、node --check、git diff --check、pip check 通過。16 份 manifest 均有不同 SHA-256。macOS CPU 初次公開資料訓練加單次推論量測約 56 ms（不是效能保證）；後續快取模型。pytest 有一個上游 Starlette/HTTPX 棄用警告，不影響 6 項測試通過。
+
+受試者隔離追加核對：每窗 Welch 特徵不估計跨受試者參數；scaler 與 logistic regression 僅在 g<=6 的 X/y fit，測試 g>=7 不進入 fit。新增回歸測試重算 S001–S006 特徵平均值，與已訓練 StandardScaler.mean_ 逐項比對，確認縮放前處理無測試集洩漏。
+
+Docker 驗證映像：`og-eeg-demo:local`，ID `sha256:14d0a42c04e5a661790ab2d1ef9d4fe30ed475895e081eb8cde9d8099d2a0e63`。本機測試容器名稱 `og-eeg-demo-local-check`，未遠端部署。

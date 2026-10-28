@@ -66,3 +66,21 @@ def test_real_baseline_if_downloaded():
         [features(load_record(7, False, "physionet")[:, : FS * 4])[0]]
     )
     assert np.isfinite(p).all() and np.isclose(p.sum(), 1)
+
+
+def test_scaler_is_fit_only_on_training_subjects():
+    model, _ = train("synthetic")
+    training_features = []
+    for subject in range(1, 7):
+        for closed in (False, True):
+            signal = synthetic(subject, closed)
+            for start in range(0, signal.shape[1] - FS * 4 + 1, FS * 4):
+                window = signal[:, start : start + FS * 4]
+                if quality(window)["accepted"]:
+                    training_features.append(features(window)[0])
+    np.testing.assert_allclose(
+        model.named_steps["standardscaler"].mean_,
+        np.mean(training_features, axis=0),
+        rtol=1e-12,
+        atol=1e-12,
+    )
