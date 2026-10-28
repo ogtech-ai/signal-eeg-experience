@@ -56,7 +56,7 @@ API 測試涵蓋頻譜、受試者隔離、訊號變化、品質拒絕、人工�
 
 ## 部署與後續串接
 
-[VM 部署說明](docs/DEPLOYMENT.md)；尚未遠端部署。GitHub Actions `deploy-vm.yml` 僅手動 preflight，缺設定立即失敗，即使填齊仍不執行遠端操作。沒有持久憑證、IAM、防火牆或雲資源變更。
+[常駐主機搬遷清單](docs/MIGRATION.md) 與 [VM 部署範本](docs/DEPLOYMENT.md)；目前選定 已指定的常駐 Linux CPU 主機，尚未遠端部署。GitHub Actions `deploy-vm.yml` 僅手動 preflight，缺設定立即失敗，即使填齊仍不執行遠端操作。沒有持久憑證、IAM、防火牆或雲資源變更。
 
 設備介面未提供：未來 adapter 至少需 sample rate、通道名稱、單位、時間戳與資料權限。API 提供未來介接邊界，但本次未承諾設備相容。公開展示不提供任意資料上傳，也不收集個資。
 

@@ -1,3 +1,5 @@
+> 最新選定搬遷目標是常駐 已指定的常駐 Linux CPU 主機，尚未遠端部署；目前移交依 [MIGRATION.md](MIGRATION.md)。下方 GCP 設定保留為未啟用範本，不是本次部署指令。
+
 # GCP CPU VM 部署交接
 
 狀態：等待使用者提供既有 VM；未購買資源、未部署、未改 IAM／防火牆。維持 GCP VM 路徑，不使用 Cloud Run。
