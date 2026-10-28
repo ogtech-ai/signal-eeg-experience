@@ -1,0 +1,25 @@
+name: GCP VM deployment preflight (no remote execution)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: demo
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      VM: ${{ vars.GCP_VM_NAME }}
+      ZONE: ${{ vars.GCP_ZONE }}
+      PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+      SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+    steps:
+      - name: Require explicit deployment configuration
+        shell: bash
+        run: |
+          for key in PROJECT VM ZONE PROVIDER SERVICE_ACCOUNT; do
+            if [ -z "${!key}" ]; then echo "Missing $key; no deployment performed"; exit 1; fi
+          done
+          echo 'Preflight only. Remote deploy intentionally not implemented until VM identity and access are approved.'
+          exit 1
