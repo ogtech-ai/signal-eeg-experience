@@ -63,3 +63,14 @@ API 測試涵蓋頻譜、受試者隔離、訊號變化、品質拒絕、人工�
 ## 授權
 
 Demo 原始碼採 MIT，見 LICENSE。公開 EEG 不含於 git，資料遵循 ODC Attribution 1.0；引用、套件選擇與授權見 [SOURCES.md](docs/SOURCES.md)。未包含客戶提案、私有資料、秘密或外部模型權重。
+
+## 無聲操作錄影
+
+```sh
+# 先啟動本機 uvicorn 並下載公開資料
+python tests/record_demo.py
+ffmpeg -i artifacts/recording/og-eeg-full-operation.webm -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/recording/og-eeg-full-operation.mp4
+ffprobe -v error -show_streams artifacts/recording/og-eeg-full-operation.mp4
+```
+
+錄影腳本實際操作本應用，涵蓋公開／合成來源、播放、片段、分析、品質拒絕與匯出；不是生成動畫。不錄桌面、麥克風或音軌。影片與匯出摘要留在忽略的 artifacts/，不放入程式 repo。公開 EEG 是錄製回放，現場設備未串接。

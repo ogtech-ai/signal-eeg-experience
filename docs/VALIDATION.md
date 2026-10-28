@@ -37,3 +37,9 @@
 受試者隔離追加核對：每窗 Welch 特徵不估計跨受試者參數；scaler 與 logistic regression 僅在 g<=6 的 X/y fit，測試 g>=7 不進入 fit。新增回歸測試重算 S001–S006 特徵平均值，與已訓練 StandardScaler.mean_ 逐項比對，確認縮放前處理無測試集洩漏。
 
 Docker 驗證映像：`og-eeg-demo:local`，ID `sha256:14d0a42c04e5a661790ab2d1ef9d4fe30ed475895e081eb8cde9d8099d2a0e63`。本機測試容器名稱 `og-eeg-demo-local-check`，未遠端部署。
+
+## 完整無聲操作影片
+
+`tests/record_demo.py` 真實操作 Playwright 的隔離應用 viewport，包含公開 EEG 回放、片段選取、睜閉眼推論與場景反應、人工雜訊品質拒絕、兩次摘要匯出、合成資料切換與分析。沒有生成動畫替代操作，沒有錄桌面、其他視窗或麥克風。
+
+輸出 MP4：1440×1080、H.264、58.6 秒、2,028,282 bytes；ffprobe 確認僅一條 video stream、零音軌，ffmpeg 完整解碼無錯誤，並已目視檢查公開結果／拒絕／合成模式擷取畫面。錄製流程 JavaScript errors 為空。影片與匯出摘要在忽略的 artifacts/recording，不加入 repo。
