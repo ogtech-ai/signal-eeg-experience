@@ -1,1 +1,130 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OG · 幸福腦訊號實驗室</title><link rel="stylesheet" href="/static/style.css"></head><body><header><b class="logo">OG<span>TECH</span></b><span>幸福腦 · 訊號實驗室</span><small>CPU BASELINE / 01</small></header><main><section class="intro"><div><p class="eyebrow">FROM SIGNAL TO EXPERIENCE</p><h1>看見訊號。<br>理解每一次變化。</h1><p>選取一段 EEG，讓頻譜、品質與模型結果一起說話。</p></div><aside><span class="dot"></span>錄製回放模式<br><small>幸福腦設備尚未串接 · 非醫療評估</small></aside></section><div class="workspace"><section class="panel controls"><p class="step">01 / 選擇訊號</p><label>資料來源<select id="source"><option value="synthetic">合成訊號 · 功能測試</option value="physionet" disabled>PhysioNet · 尚未下載</option></select></label><label>獨立測試受試者<select id="subject"><option value="7">S007</option><option value="8">S008</option></select></label><div class="toggle"><button id="open" aria-pressed="true">睜眼錄製</button><button id="closed" aria-pressed="false">閉眼錄製</button></div><label>片段起點 <output id="time">0.0 s</output><input id="start" type="range" min="0" max="55" step="1" value="0"></label><label>分析長度<select id="duration"><option value="4">4 秒</option><option value="8">8 秒</option></select></label><label class="check"><input id="artifact" type="checkbox">加入人工雜訊，觀察品質拒絕</label><p class="hint">人工雜訊僅改變分析副本，並非原始錄製。</p><button id="analyze" class="primary">分析這段訊號 ↗</button><p id="error" role="alert"></p></section><section class="panel signal"><div class="section-head"><p class="step">02 / 波形回放</p><button id="play">▶ 播放回放</button></div><p id="provenance" class="tag">合成訊號 · 非真人腦波</p><canvas id="wave" aria-label="三通道 EEG 波形"></canvas><div class="legend"><span>O1 / Oz / O2 · µV</span><span id="cursor">0.0 秒</span></div><div class="section-head"><p class="step">03 / 訊號驅動場景</p><span id="status" role="status">等待分析</span></div><div id="scene" class="scene"><div class="iris"><div class="pupil"></div></div><div><strong id="prediction">讓資料打開視野</strong><p id="score">場景開合由模型閉眼分數驅動</p></div></div><p class="hint">場景是模型輸出的視覺映射，並非人體即時量測。無聲光刺激。</p></section></div><section class="results"><div class="panel"><p class="step">04 / 分析證據</p><div id="bands"><p class="hint">分析後顯示 4–30 Hz 頻帶相對功率。</p></div><p id="quality">品質門檻：峰對峰 200 µV / 平坦訊號 0.5 µV</p><pre id="metrics">受試者分割與獨立測試結果將顯示於此。</pre></div><div class="panel"><div class="section-head"><p class="step">05 / 專家審閱</p><button id="download" disabled>下載摘要 ↓</button></div><p id="summary">選取片段後產生可追溯摘要。文字使用固定模板，不呼叫付費 API。</p><p class="hint">技術展示，不推論壓力、腦損傷或療效。公開 EEG 的任務結果不能直接外推至幸福腦設備。</p></div></section><footer>OG TECHNOLOGY / EEG EXPERIENCE DEMO <a href="https://physionet.org/content/eegmmidb/1.0.0/" target="_blank" rel="noreferrer">公開資料與來源 ↗</a></footer></main><script src="/static/app.js"></script></body></html>
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OG · 幸福腦訊號實驗室</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <b class="logo">OG<span>TECH</span></b
+      ><span>幸福腦 · 訊號實驗室</span><small>CPU BASELINE / 01</small>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">FROM SIGNAL TO EXPERIENCE</p>
+          <h1>看見訊號。<br />理解每一次變化。</h1>
+          <p>選取一段 EEG，讓頻譜、品質與模型結果一起說話。</p>
+        </div>
+        <aside>
+          <span class="dot"></span>錄製回放模式<br /><small
+            >幸福腦設備尚未串接 · 非醫療評估</small
+          >
+        </aside>
+      </section>
+      <div class="workspace">
+        <section class="panel controls">
+          <p class="step">01 / 選擇訊號</p>
+          <label
+            >資料來源<select id="source">
+              <option value="synthetic">合成訊號 · 功能測試</option>
+              <option value="physionet" disabled>PhysioNet · 尚未下載</option>
+            </select></label
+          ><label
+            >獨立測試受試者<select id="subject">
+              <option value="7">S007</option>
+              <option value="8">S008</option>
+            </select></label
+          >
+          <div class="toggle">
+            <button id="open" aria-pressed="true">睜眼錄製</button
+            ><button id="closed" aria-pressed="false">閉眼錄製</button>
+          </div>
+          <label
+            >片段起點 <output id="time">0.0 s</output
+            ><input
+              id="start"
+              type="range"
+              min="0"
+              max="55"
+              step="1"
+              value="0" /></label
+          ><label
+            >分析長度<select id="duration">
+              <option value="4">4 秒</option>
+              <option value="8">8 秒</option>
+            </select></label
+          ><label class="check"
+            ><input
+              id="artifact"
+              type="checkbox"
+            />加入人工雜訊，觀察品質拒絕</label
+          >
+          <p class="hint">人工雜訊僅改變分析副本，並非原始錄製。</p>
+          <button id="analyze" class="primary">分析這段訊號 ↗</button>
+          <p id="error" role="alert"></p>
+        </section>
+        <section class="panel signal">
+          <div class="section-head">
+            <p class="step">02 / 波形回放</p>
+            <button id="play">▶ 播放回放</button>
+          </div>
+          <p id="provenance" class="tag">合成訊號 · 非真人腦波</p>
+          <canvas id="wave" aria-label="三通道 EEG 波形"></canvas>
+          <div class="legend">
+            <span>O1 / Oz / O2 · µV</span><span id="cursor">0.0 秒</span>
+          </div>
+          <div class="section-head">
+            <p class="step">03 / 訊號驅動場景</p>
+            <span id="status" role="status">等待分析</span>
+          </div>
+          <div id="scene" class="scene">
+            <div class="iris"><div class="pupil"></div></div>
+            <div>
+              <strong id="prediction">讓資料打開視野</strong>
+              <p id="score">場景開合由模型閉眼分數驅動</p>
+            </div>
+          </div>
+          <p class="hint">
+            場景是模型輸出的視覺映射，並非人體即時量測。無聲光刺激。
+          </p>
+        </section>
+      </div>
+      <section class="results">
+        <div class="panel">
+          <p class="step">04 / 分析證據</p>
+          <div id="bands">
+            <p class="hint">分析後顯示 4–30 Hz 頻帶相對功率。</p>
+          </div>
+          <p id="quality">品質門檻：峰對峰 200 µV / 平坦訊號 0.5 µV</p>
+          <pre id="metrics">受試者分割與獨立測試結果將顯示於此。</pre>
+        </div>
+        <div class="panel">
+          <div class="section-head">
+            <p class="step">05 / 專家審閱</p>
+            <button id="download" disabled>下載摘要 ↓</button>
+          </div>
+          <p id="summary">
+            選取片段後產生可追溯摘要。文字使用固定模板，不呼叫付費 API。
+          </p>
+          <p class="hint">
+            技術展示，不推論壓力、腦損傷或療效。公開 EEG
+            的任務結果不能直接外推至幸福腦設備。
+          </p>
+        </div>
+      </section>
+      <footer>
+        OG TECHNOLOGY / EEG EXPERIENCE DEMO
+        <a
+          href="https://physionet.org/content/eegmmidb/1.0.0/"
+          target="_blank"
+          rel="noreferrer"
+          >公開資料與來源 ↗</a
+        >
+      </footer>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

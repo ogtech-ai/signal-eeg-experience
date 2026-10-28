@@ -1,4 +1,6 @@
-# OG 幸福腦售前互動技術 Demo
+# OG EEG 訊號互動 Demo
+
+建議 repository：`ogtech-ai/signal-eeg-experience`；topics：`signal`、`eeg`、`demo`、`cpu`、`fastapi`。適用於公開 EEG 教學、訊號品質展示與輕量模型技術評估；未宣稱與任何客戶合作。
 
 CPU 可運行的獨立研究展示：錄製樣本 → 波形回放 → 選取 4–8 秒 → 品質檢查 → 頻譜特徵／輕量 ML → 場景開合 → JSON 專家摘要。繁體中文、黑白黃介面，不依賴付費 API。
 
@@ -39,7 +41,7 @@ PhysioNet EEGMMIDB 1.0.0，R01 睜眼、R02 閉眼；O1/Oz/O2 三個枕葉通道
 
 訓練 S001–S006；獨立測試 S007–S008，依受試者分割，縮放只 fit 訓練集。每類各一段原始錄製；視窗雖不重疊，仍非獨立受試者。小樣本僅為技術基線，無外部驗證、無信賴區間、機率未校準。展示已接觸測試受試者；後續調參須另保留新測試集。4 秒模型用於 8 秒片段屬展示延伸，未單獨驗證。品質門檻為啟發式：任一通道峰對峰 >200 µV 或標準差 <0.5 µV 即拒絕，並非 autoreject 或臨床品質認證。不映射成壓力、腦損傷或療效。
 
-合成資料依 deterministic seed 產生不同 alpha 振幅，只驗證功能與管線；其準確率不代表真實 EEG 效果。公開資料的實際測試結果由 `prepare_data` 產生於 `data/evaluation.json`，manifest 記錄每份下載 URL 與 SHA-256。請參考 [驗證紀錄](docs/VALIDATION.md)。
+合成資料依 deterministic seed 產生不同 alpha 振幅，只驗證功能與管線；其準確率不代表真實 EEG 效果。已驗證公開 EEG：品質通過 25/60 測試窗的平衡準確率 88.89%；35 窗被拒絕，且訓練只有 4 位受試者留有可用窗口。詳見驗證紀錄，不能外推成產品成效。公開模式預設 S008 的 12–16 秒品質通過片段，其他位置仍可自由選取。公開資料的實際測試結果由 `prepare_data` 產生於 `data/evaluation.json`，manifest 記錄每份下載 URL 與 SHA-256。請參考 [驗證紀錄](docs/VALIDATION.md)。
 
 ## 測試
 
