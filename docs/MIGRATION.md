@@ -31,3 +31,7 @@ python3 scripts/verify_deployment.py --base-url http://127.0.0.1:8000
 ## Mac 資料可重建性
 
 本案原驗證容器 `og-eeg-demo-local-check` 使用 `/Users/jeff.hong/Documents/Codex/2026-10-29/task/data` 唯讀 bind mount 到 `/app/data`，沒有 named volume。16 份 EDF 可由合法公開下載腳本重取；NPZ、manifest 和 evaluation 可重建。模型僅在記憶體訓練快取，無私有或不可重建權重。錄影與手動審閱輸出保留於 artifacts/，不是容器 volume，這次不清理。
+
+## UI v2 交接注意
+
+新版 source 已包含暖白／teal 單頁與完整 UI QA／錄影腳本，後端模型及 public-samples 內容不變。本輪依要求沒有操作 Mac Docker；既有具名映像是舊 UI，父端驗收後必須由新版 source 包重新 build，不能直接移交舊映像宣稱是新版。新截圖與無聲操作影片留在 artifacts/，未加入公開 source 包。

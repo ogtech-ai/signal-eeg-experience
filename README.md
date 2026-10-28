@@ -2,7 +2,7 @@
 
 建議 repository：`ogtech-ai/signal-eeg-experience`；topics：`signal`、`eeg`、`demo`、`cpu`、`fastapi`。適用於公開 EEG 教學、訊號品質展示與輕量模型技術評估；未宣稱與任何客戶合作。
 
-CPU 可運行的獨立研究展示：錄製樣本 → 波形回放 → 選取 4–8 秒 → 品質檢查 → 頻譜特徵／輕量 ML → 場景開合 → JSON 專家摘要。繁體中文、黑白黃介面，不依賴付費 API。
+CPU 可運行的獨立研究展示：錄製樣本 → 波形回放 → 選取 4–8 秒 → 品質檢查 → 頻譜特徵／輕量 ML → 場景開合 → JSON 專家摘要。繁體中文、暖白與 teal 的單頁產品介面，不依賴付費 API。
 
 **尚未串接幸福腦設備。不是即時使用者腦波、醫療器材或療效展示。** 場景只映射睜眼／閉眼模型分數，沒有光刺激或音訊控制。人工雜訊在介面及摘要明示。
 
@@ -29,11 +29,11 @@ Docker 以非 root 使用者執行，僅綁定主機 loopback；健康檢查 `/a
 
 ## 示範流程
 
-1. 選公開錄製或合成訊號、獨立測試受試者與睜／閉眼條件。
-2. 播放波形（原始資料降採樣到 80 Hz 顯示；分析使用 160 Hz），拖曳起點選片段。
-3. 點「分析」；Alpha 相對功率、任務分數、場景開合與摘要由同一次計算回傳。
-4. 加入人工雜訊後再分析；O1 脈衝使品質門檻失敗，模型停止判讀。波形會呈現實際受污染的分析副本。
-5. 下載 JSON 摘要，包含片段數值、品質、資料來源、人工雜訊旗標和測試基線。
+1. 選公開錄製或合成來源，按「開始體驗」，同時播放波形並進行品質檢查與真實推論。
+2. 切換睜眼／閉眼樣本會直接載入並分析；風景視窗的開合由閉眼任務分數控制，不代表放鬆或醫療效果。
+3. 在底部時間軸選片段；拖動時舊結果立即失效，放開後重新分析。主畫面與時間軸均可暫停回放。波形顯示 80 Hz、分析使用原始 160 Hz。
+4. 開啟「試試雜訊攔截」；O1 人工脈衝實際加入分析副本，品質未通過時隱藏分數並停止視覺回應。按「恢復原始訊號」重新分析。
+5. 展開「分析證據與審閱摘要」，查看頻帶、品質、模型基線及 25/60 覆蓋率，並匯出可追溯 JSON。受試者與片段長度在「片段設定」內。
 
 ## 模型與限制
 
@@ -52,11 +52,11 @@ python -m playwright install chromium
 python tests/ui_check.py
 ```
 
-API 測試涵蓋頻譜、受試者隔離、訊號變化、品質拒絕、人工雜訊與輸入界限。瀏覽器測試涵蓋睜閉眼互動、播放、拒絕、JSON 下載、390px 響應式與 JS 錯誤。截圖只留本機 `artifacts/`。CI 用標準 GitHub-hosted `ubuntu-latest`，10 分鐘上限，不下載 EEG、不保留 Actions artifact；請依組織當前計費與使用量政策確認額度。
+API 測試涵蓋頻譜、受試者隔離、訊號變化、品質拒絕、人工雜訊與輸入界限。瀏覽器測試涵蓋首次使用、公開／合成樣本自動推論、播放、拒絕／恢復、JSON 來源、真正延後舊回應的競態測試、1280／390／360px 版面與 JS 錯誤。截圖只留本機 `artifacts/`。CI 用標準 GitHub-hosted `ubuntu-latest`，10 分鐘上限，不下載 EEG、不保留 Actions artifact；請依組織當前計費與使用量政策確認額度。
 
 ## 部署與後續串接
 
-[常駐主機搬遷清單](docs/MIGRATION.md) 與 [VM 部署範本](docs/DEPLOYMENT.md)；目前選定 已指定的常駐 Linux CPU 主機，尚未遠端部署。GitHub Actions `deploy-vm.yml` 僅手動 preflight，缺設定立即失敗，即使填齊仍不執行遠端操作。沒有持久憑證、IAM、防火牆或雲資源變更。
+[常駐主機搬遷清單](docs/MIGRATION.md) 與 [VM 部署範本](docs/DEPLOYMENT.md)；目前準備移交至指定的常駐 Linux CPU 主機；本工作區不執行遠端部署。GitHub Actions `deploy-vm.yml` 僅手動 preflight，缺設定立即失敗，即使填齊仍不執行遠端操作。沒有持久憑證、IAM、防火牆或雲資源變更。
 
 設備介面未提供：未來 adapter 至少需 sample rate、通道名稱、單位、時間戳與資料權限。API 提供未來介接邊界，但本次未承諾設備相容。公開展示不提供任意資料上傳，也不收集個資。
 
@@ -69,8 +69,8 @@ Demo 原始碼採 MIT，見 LICENSE。公開 EEG 不含於 git，資料遵循 OD
 ```sh
 # 先啟動本機 uvicorn 並下載公開資料
 python tests/record_demo.py
-ffmpeg -i artifacts/recording/og-eeg-full-operation.webm -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/recording/og-eeg-full-operation.mp4
-ffprobe -v error -show_streams artifacts/recording/og-eeg-full-operation.mp4
+ffmpeg -i artifacts/recording-v2/og-eeg-full-operation-v2.webm -an -c:v libx264 -pix_fmt yuv420p -movflags +faststart artifacts/recording-v2/OG_EEG_Demo_Full_Operation_Silent_v2.mp4
+ffprobe -v error -show_streams artifacts/recording-v2/OG_EEG_Demo_Full_Operation_Silent_v2.mp4
 ```
 
 錄影腳本實際操作本應用，涵蓋公開／合成來源、播放、片段、分析、品質拒絕與匯出；不是生成動畫。不錄桌面、麥克風或音軌。影片與匯出摘要留在忽略的 artifacts/，不放入程式 repo。公開 EEG 是錄製回放，現場設備未串接。
