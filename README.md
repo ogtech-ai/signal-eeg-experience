@@ -1,74 +1,66 @@
-# OG EEG 檢測報告工作台
+# Signal EEG Experience
 
-可重用的 CPU 訊號審閱專案：匿名個案／作息 → 公開或合成示範、CSV 上傳 → 品質遮罩與頻譜 → 可定位片段 → 可列印 PDF、JSON 與原始資料。繁體中文單頁介面，無付費 API、無 GPU。適用於 EEG 技術教學與非臨床訊號審閱；未宣稱任何客戶合作或設備串接。
+A CPU-based EEG review and report workspace with a Traditional Chinese interface. Review public or synthetic EEG, upload a bounded CSV, inspect quality flags and spectra, locate evidence windows, and export JSON or use the browser print dialog to save a PDF.
 
-**技術觀察，待專業確認。** 不偵測疾病，不推論焦慮／壓力／放鬆或療效。示範個案完全虛構，示範 EEG 不對應填寫個案。睜閉眼只標示錄製條件，不當成雜訊。
+**Technical observations only; not a medical device or diagnostic tool.** It does not infer disease, anxiety, relaxation, treatment effects, or age norms. Fictional case details and self-reported routines are separate from EEG evidence. Public recordings are not the visitor's brain activity. No device integration is included.
 
-## 啟動
-
-Python 3.12，建議 2 vCPU、2 GB RAM、1 GB 磁碟（瀏覽器測試另需空間）。
+## Quick start
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.lock
-python -m scripts.prepare_data  # 可選：合法公開 EEG，S001–S008 R01/R02，原始 EDF 約20MB
+# Optional: download attributed PhysioNet samples; synthetic sources work without them.
+python -m scripts.prepare_data
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-開啟 http://127.0.0.1:8000 。這是本機網址。沒有公開樣本時仍有明示的合成來源。公開預設 S008 R01（睜眼），可切 R02（閉眼）。公開錄製不是即時使用者腦波；設備尚未串接。
+Open http://127.0.0.1:8000. Health endpoint: `/api/health`.
 
 ```sh
-docker compose up --build
+docker compose up --build -d
 ```
 
-Docker 非 root，預設只綁 loopback，資料唯讀掛載。健康檢查 `/api/health`。遠端部署由管理者核准目標、HTTPS 與存取政策後執行；不會自動購買資源、改 IAM 或防火牆。
+The container runs as a non-root user, binds only loopback, and mounts `data/` read-only. The supplied Compose limits are 2 CPUs and 2 GiB RAM; start with 2 vCPUs, 2 GiB RAM and 1 GB disk, excluding browser tooling. These are starting allocations, not throughput guarantees. Public deployment needs administrator-managed HTTPS and request/concurrency controls.
 
-## 操作與資料保護
+## Configuration and CPU deployment
 
-1. 保留完全虛構個案或選匿名自填。年齡、作息、舒適偏好只在瀏覽器組合，**不送分析 API**。舒適選項不輸出聲光。
-2. 選公開／合成來源，或選自己的 CSV。按「產生檢測報告」。修改輸入後舊報告失效，需重新產生才能匯出。
-3. 查看四頻帶、原始時序、PSD、每四秒時間—頻率。點遮罩表或證據連結定位原始片段；定位不會重算或修改平均頻譜。
-4. 列印／另存 PDF 使用瀏覽器列印視窗。JSON 保留數值、遮罩、規則、來源雜湊與個案背景；原始 CSV 可另下載核對。PDF／JSON 含自填資料，請自行保管。
-5. 「清空」釋放目前介面持有的資料。沒有 localStorage、資料庫、共享個案或報告 URL；這不是作業系統等級安全抹除承諾。
+Python 3.12; no GPU, paid API, API key, or application secret is required. The application does not load `.env`; `.env.example` documents this explicitly. Do not put credentials or personal records in this repository.
 
-上傳只在伺服器記憶體處理，不寫檔、不記錄內容、不傳第三方。分析結果回到本次請求，不提供持久取回。API 回應 `Cache-Control: no-store`。正式公開前仍應由部署者設定 HTTPS、請求速率／並行限制與存取政策，避免上傳不必要個資。
+## Review workflow and privacy
 
-## CSV 契約與數學方法
+1. Keep the fictional case or enter an anonymous background. Background fields remain in the browser and are not sent to the analysis API.
+2. Choose public or synthetic EEG, or upload a CSV, then generate a report. Changing inputs invalidates the old report.
+3. Inspect raw traces, Welch PSD, four band powers, and four-second quality windows. Evidence links locate the corresponding raw segment.
+4. Export JSON and raw CSV, or print/save a PDF. Exports can contain your entered background; store them responsibly.
+5. Clear the workspace to release the current interface data. This is not an operating-system secure-erasure guarantee.
 
-第一版上傳僅支援 UTF-8 CSV，**不支援 EDF 上傳**。EDF 僅用 MNE 讀取已知公開資料，不自寫 EDF parser。
+Uploads are processed in server memory without file persistence or third-party analysis. Responses use `Cache-Control: no-store`. There is no database, shared case URL, or localStorage. Avoid uploading identifying health information to a public demo.
 
-```csv
-time_s,O1_uV,O2_uV
-0,10,12
-0.00625,11,13
-```
+## Input and analysis limits
 
-上例僅展示欄位，完整檔須 8–120 秒；1–8 EEG 通道、128–512 Hz、時間從零開始且等距（1%容差）、最多8MiB／61440列。通道名為英文字母開頭 `_uV` 結尾，不接受 EOG/ECG/EMG 混入 EEG 平均；單位必須微伏。拒絕 NaN/Inf、重複欄、錯列、非遞增時間與不合理振幅。可先下載示範原始 CSV 作格式參考。
+Upload supports UTF-8 CSV only, not EDF. Use `time_s` followed by 1–8 EEG columns ending in `_uV`, sampled uniformly at 128–512 Hz, starting at zero, lasting 8–120 seconds. Limits: 8 MiB and 61,440 rows. Non-finite values, duplicate headers, invalid timing and implausible amplitudes are rejected. Download a demo CSV for a complete example.
 
-非重疊4秒品質窗，兩秒 Hann／50% overlap Welch PSD，僅去常數均值，無濾波、插值、重參考、ICA 或自動修補。未滿四秒尾段保留原值但不納入統計。平均通過窗 PSD，再平均 EEG 通道。Delta 0.5–4、Theta 4–8、Alpha 8–13、Beta 13–30 Hz；界線採插值積分，相鄰頻帶不重複計功率，分母為0.5–30Hz總功率。不是年齡常模比較。
+Analysis uses non-overlapping four-second windows and two-second Hann Welch PSD with 50% overlap. It removes the constant mean only: no filtering, interpolation, re-reference, ICA or automatic repair. A partial final window is retained in raw data but excluded from statistics. Delta 0.5–4, theta 4–8, alpha 8–13 and beta 13–30 Hz use interpolated boundary integration without double counting.
 
-- Q1：任一通道峰對峰 >200µV，排除整窗平均。
-- Q2：任一通道標準差 <0.5µV，排除整窗平均。
-- A1：0.5–4 /0.5–45Hz >65% 且峰對峰 >120µV，疑似眼動／慢漂移，僅標記。
-- A2：20–45 /0.5–45Hz >50% 且去均值 RMS >10µV，疑似肌電／高頻干擾，僅標記。
+- Q1: peak-to-peak amplitude above 200 µV excludes the whole window.
+- Q2: standard deviation below 0.5 µV excludes the whole window.
+- A1/A2: explicitly heuristic slow/high-frequency interference flags; they do not establish EOG/EMG origin or a clinical finding.
 
-A1/A2 是未經臨床驗證的啟發式，沒有 EOG/EMG 不能確認來源。A2 不是 MNE 110–140Hz 肌電算法。所有窗拒絕時不輸出假正常的頻帶值。時間—頻率圖包含全部窗，排除窗加斜線。觀察模板保留規則及片段證據；作息提示只取自自填，不由 EEG 推測。
+All-rejected input produces no invented normal band values. See the detailed [report acceptance](docs/REPORT_ACCEPTANCE.md). Legacy eyes-open/closed baseline endpoints remain for compatibility; their historical scores are not report accuracy.
 
-## 驗證與移交
+## Tests
 
 ```sh
 python -m pytest -q
-python -m playwright install chromium
-# 另啟動 uvicorn 後
-python tests/ui_check.py
 python scripts/verify_deployment.py --base-url http://127.0.0.1:8000
-python tests/record_demo.py   # 真實瀏覽器操作無聲 WebM；不錄桌面
-python scripts/package_migration.py # 僅已提交來源與明確白名單公開樣本
+# Optional browser checks after installing Playwright/Chromium and starting the server:
+python -m playwright install chromium
+python tests/ui_check.py
 ```
 
-測試涵蓋已知正弦頻帶、功率積分、原值不變、遮罩、條件獨立、全拒絕、輸入邊界、無檔案持久化、個案不傳送、下載與錯誤恢復、360/390/1280/1440px、PDF 列印及無 JS 錯誤。CI 使用標準 GitHub-hosted runner，不保留 artifact、不下載 EEG；部署 workflow 為手動 preflight 範本，未啟用遠端部署。
+Tests cover signal math, masks, input boundaries, privacy and report behavior. Browser and target-host checks are separate from unit tests. [Deployment](docs/DEPLOYMENT.md), [migration](docs/MIGRATION.md), and [historical validation](docs/VALIDATION.md) describe their respective scopes.
 
-[來源與授權](docs/SOURCES.md)、[搬遷流程](docs/MIGRATION.md)、[部署說明](docs/DEPLOYMENT.md)。程式 MIT；PhysioNet EEGMMIDB 1.0.0 為 ODC Attribution 1.0，下載腳本及 manifest 保留來源與雜湊。未將原始資料、報告、權重或秘密放入 git。
+## Sources and licenses
 
-舊錄製回放／睜閉眼 ML 基線 API 保留相容，**不是目前報告模型**；其小樣本驗證見 [歷史基線紀錄](docs/VALIDATION.md)，不可把舊88.89%當報告或產品準確率。舊 UI 回退標籤 `experience-ui-reviewed-9c8f6cb`。建議公司 repo `ogtech-ai/signal-eeg-experience`，topics `signal,eeg,cpu,demo`。
+Project code is [MIT](LICENSE). Raw recordings are excluded from Git. The optional download uses Schalk's [PhysioNet EEG Motor Movement/Imagery Dataset 1.0.0](https://physionet.org/content/eegmmidb/1.0.0/), [DOI 10.13026/C28G6P](https://doi.org/10.13026/C28G6P), under [ODC Attribution 1.0](https://physionet.org/content/eegmmidb/view-license/1.0.0/). Preserve attribution when distributing derived data. Synthetic signals are generated by this project's code. Dependency distributions retain their own licenses; see [source provenance](docs/SOURCES.md). No customer dataset or model weights are included.

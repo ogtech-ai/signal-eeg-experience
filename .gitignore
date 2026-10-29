@@ -12,3 +12,12 @@ output/
 reports/
 uploads/
 *.csv
+
+# Local secrets, credentials and generated reports
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.DS_Store
