@@ -132,21 +132,30 @@ with sync_playwright() as p:
     page.wait_for_function(
         "document.querySelector('#phase').textContent==='報告已產生'"
     )
-    # Final deliverables use only the fictional case + publicly reproducible source if available.
-    public = page.locator('#source option[value="public-open"]').is_enabled()
-    if public:
-        page.select_option("#source", "public-open")
-        page.click("#generate")
-        page.wait_for_function(
-            "document.querySelector('#phase').textContent==='報告已產生'"
-        )
-        analysis = page.request.get(
-            "http://127.0.0.1:8000/api/report/demo?source=public-open"
-        ).json()
-        (OUT / "public-analysis.json").write_text(
-            json.dumps(analysis, ensure_ascii=False, indent=2)
-        )
-        assert analysis["quality"]["included_windows"] == 13
+    # CI must not depend on optional downloaded recordings. Exercise the real
+    # synthetic report path on every viewport rather than treating option
+    # actionability as evidence that its dataset exists.
+    catalog = page.request.get("http://127.0.0.1:8000/api/report/catalog").json()
+    if not catalog["public_available"]:
+        for source in ("public-open", "public-closed"):
+            option = page.locator(f'#source option[value="{source}"]')
+            assert option.get_attribute("disabled") is not None
+            missing = page.request.get(
+                f"http://127.0.0.1:8000/api/report/demo?source={source}"
+            )
+            assert missing.status == 409
+            assert "公開樣本尚未下載" in missing.json()["detail"]
+    page.select_option("#source", "synthetic-clean")
+    page.click("#generate")
+    page.wait_for_function(
+        "document.querySelector('#phase').textContent==='報告已產生'"
+    )
+    analysis = page.request.get(
+        "http://127.0.0.1:8000/api/report/demo?source=synthetic-clean"
+    ).json()
+    assert analysis["source"]["kind"] == "synthetic"
+    assert analysis["quality"]["included_windows"] == 10
+    (OUT / "synthetic-analysis.json").write_text(json.dumps(analysis, indent=2))
     page.locator("h1").click()
     page.screenshot(path=str(OUT / "desktop-preview.png"), full_page=True)
     for width, height in ((1280, 900), (390, 844), (360, 800)):
@@ -165,9 +174,7 @@ with sync_playwright() as p:
             page.locator("#window-table tr").nth(2).click()
             assert page.locator("#window-select").input_value() == "2"
             page.locator("#workflow-details > summary").click()
-            page.select_option(
-                "#source", "public-open" if public else "synthetic-clean"
-            )
+            page.select_option("#source", "synthetic-clean")
             page.click("#generate")
             page.wait_for_function(
                 "document.querySelector('#phase').textContent==='報告已產生'"
@@ -185,7 +192,7 @@ with sync_playwright() as p:
     page.evaluate("window.dispatchEvent(new Event('beforeprint'))")
     Path("output/pdf").mkdir(parents=True, exist_ok=True)
     page.pdf(
-        path="output/pdf/OG_EEG_Public_Sample_Report.pdf",
+        path="output/pdf/OG_EEG_Synthetic_Sample_Report.pdf",
         format="A4",
         print_background=True,
         prefer_css_page_size=True,

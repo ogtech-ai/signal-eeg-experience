@@ -179,3 +179,26 @@ def test_demo_csv_and_public_report_reproducibility():
         )
         assert a["quality"]["unscored_tail_seconds"] == 1
         assert a["source"]["kind"] == "public"
+
+
+def test_missing_optional_public_samples_keep_synthetic_reports_available(
+    monkeypatch, tmp_path
+):
+    import app.core as core
+    import app.main as main
+
+    monkeypatch.setattr(core, "ROOT", tmp_path)
+    monkeypatch.setattr(main, "ROOT", tmp_path)
+    catalog = client.get("/api/report/catalog").json()
+    assert catalog["public_available"] is False
+    for source in ("public-open", "public-closed"):
+        entry = next(s for s in catalog["sources"] if s["id"] == source)
+        assert entry["available"] is False
+        response = client.get(f"/api/report/demo?source={source}")
+        assert response.status_code == 409
+        assert "公開樣本尚未下載" in response.json()["detail"]
+    for source in ("synthetic-clean", "synthetic-artifacts"):
+        response = client.get(f"/api/report/demo?source={source}")
+        assert response.status_code == 200
+        assert response.json()["source"]["kind"] == "synthetic"
+    assert not list(tmp_path.iterdir())
